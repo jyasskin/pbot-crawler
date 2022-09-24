@@ -92,7 +92,7 @@ def fetch_one(crawl: Crawl, stdscr):
             # ones. We'll see if this misses anything important.
             if 'nofollow' in link.get('rel', []):
                 continue
-            href = urljoin(url, link['href'])
+            href = urljoin(url, link['href'].strip())
             crawl.add_pending(href)
 
 
@@ -125,9 +125,6 @@ def write_response(crawl: Crawl, response: requests.Response, path: Path):
     else:
         response.close()
     return None
-
-
-HAS_SCHEME = re.compile(r'^[^/]+:')
 
 
 def urljoin(base, relative):
