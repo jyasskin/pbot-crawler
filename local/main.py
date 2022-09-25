@@ -1,16 +1,16 @@
 import curses
-import re
-import sys
 import time
 import urllib.parse
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Union
 from urllib.robotparser import RobotFileParser
 
 import requests
 import whatwg_url
 from bs4 import BeautifulSoup
+
+from cache import Cache, CacheState
 
 URL_ORIGIN = 'https://www.portland.gov/'
 
@@ -28,21 +28,24 @@ class Crawl:
             roots: A list of root URLs to start the crawl with.
             max_size: The maximum size of the crawl in bytes. If None, the crawl will continue until there are no more pages to fetch.
         """
-        self.out_dir = out_dir / datetime.now(timezone.utc).date().isoformat()
+        self.current_crawl = out_dir / \
+            datetime.now(timezone.utc).date().isoformat()
+        self.prev_crawl = newest_subdirectory_except(
+            out_dir, self.current_crawl)
+        self.cache = Cache(URL_ORIGIN, out_dir,
+                           self.current_crawl, self.prev_crawl)
         self.pending = set(roots)
         self.complete = set()
         self.total_size = 0
         self.max_size = max_size
         self.robots = RobotFileParser(URL_ORIGIN + 'robots.txt')
         self.robots.read()
-        self.crawl_delay = self.robots.crawl_delay(USER_AGENT)
-        if self.crawl_delay is None:
-            self.crawl_delay = 1
-        self.crawl_delay = timedelta(seconds=self.crawl_delay)
+        self.crawl_delay = timedelta(
+            seconds=self.robots.crawl_delay(USER_AGENT) or 1)
 
         self.next_fetch = datetime.now(timezone.utc)
 
-    def ok_to_crawl(self, url):
+    def ok_to_crawl(self, url: str):
         return url.startswith('https://www.portland.gov/transportation') and self.robots.can_fetch(USER_AGENT, url)
 
     def wait_for_next_fetch(self):
@@ -60,6 +63,31 @@ class Crawl:
             self.pending.add(url)
 
 
+def newest_subdirectory_except(out_dir: Path, except_dir: Path) -> Union[Path, None]:
+    """Find the newest subdirectory of a directory, excluding a specific directory.
+
+    Only examines subdirectories in ISO date format.
+
+    Args:
+        out_dir: The directory to search.
+        except_dir: The directory to exclude.
+
+    Returns: The newest subdirectory, or None if there are no other subdirectories.
+    """
+    newest = None
+    newest_date = None
+    for sub_dir in out_dir.iterdir():
+        try:
+            sub_dir_date = date.fromisoformat(sub_dir.name)
+        except ValueError:
+            continue
+        if sub_dir.is_dir() and sub_dir != except_dir and (
+                newest_date is None or sub_dir_date > newest_date):
+            newest = sub_dir
+            newest_date = sub_dir_date
+    return newest
+
+
 def fetch_one(crawl: Crawl, stdscr):
     """Fetch one URL from the crawl, and add its links back to the crawl.
 
@@ -73,19 +101,18 @@ def fetch_one(crawl: Crawl, stdscr):
     describe_progress(url, crawl, stdscr)
 
     assert crawl.ok_to_crawl(url), url
-    path = crawl.out_dir / url[len(URL_ORIGIN):].lstrip('/')
 
-    response = CachedResponse(path)
-    crawl.total_size += response.file_size  # 0 if the response wasn't cached.
-    if response.status_code == 0:
+    response = crawl.cache.response_for(url)
+    if response.state != CacheState.FRESH:
         crawl.wait_for_next_fetch()
-        with SESSION.get(url, stream=True, allow_redirects=False) as response:
-            write_response(crawl, response, path)
+        response.fetch(SESSION)
+    crawl.total_size += response.file_size
+
     if response.status_code//100 == 3:
         crawl.add_pending(response.headers['location'])
         return
 
-    if is_good_html_response(response):
+    if response.content:
         soup = BeautifulSoup(response.content, 'lxml')
         for link in soup.find_all('a', href=True):
             # Skip nofollow links. This isn't strictly required by the spec, but
@@ -101,37 +128,6 @@ def fetch_one(crawl: Crawl, stdscr):
             crawl.add_pending(clean_url(href).href)
 
 
-def is_good_html_response(response):
-    return response.status_code == 200 and response.headers.get('content-type', '').startswith('text/html')
-
-
-def write_response(crawl: Crawl, response: requests.Response, path: Path):
-    """Write a response to the crawl's output directory.
-
-    Args:
-        crawl: The crawl to write to.
-        response: The response to write.
-        path: The path to write to.
-
-    Returns: The content of HTML responses, or None for other content types.
-    """
-    path.mkdir(parents=True, exist_ok=True)
-    with open(path/'#status', 'w') as status:
-        print(response.status_code, file=status)
-    with open(path/'#headers', 'w') as headers:
-        for name, value in response.headers.lower_items():
-            crawl.total_size += headers.write(f'{name}: {value}\n')
-    # We don't need the content of non-HTML files or failed responses.
-    if is_good_html_response(response):
-        with open(path/'#content', 'wb') as content_file:
-            content = response.content
-            crawl.total_size += content_file.write(content)
-            return content
-    else:
-        response.close()
-    return None
-
-
 def urljoin(base: str, relative: str) -> whatwg_url.Url:
     """Join a base URL and a relative URL, removing any fragments."""
     url = whatwg_url.parse_url(relative, base=base)
@@ -144,43 +140,8 @@ def clean_url(url: whatwg_url.Url) -> whatwg_url.Url:
     query = urllib.parse.parse_qs(url.query)
     query.pop('utm_medium', None)
     query.pop('utm_source', None)
-    query_str = urllib.parse.urlencode(query, doseq=True)
-    if query_str == '':
-        query_str = None
-    url.query = query_str
+    url.query = urllib.parse.urlencode(query, doseq=True) or None
     return url
-
-
-class CachedResponse:
-    def __init__(self, path: Path):
-        """Loads a response from a path where it was previously crawled.
-
-        The status code is read from path/#status; the headers from path/#headers; and the body from path/#content.
-
-        Records the file size of the cached response.
-        """
-        self.file_size = 0
-        self.status_code = 0
-        self.headers = {}
-        self.content = None
-
-        try:
-            print(f'Checking {path/"#status"!a} ... ', end='')
-            with open(path/'#status', 'r') as status_file:
-                self.status_code = int(status_file.read())
-        except FileNotFoundError:
-            print('Missing')
-            return
-        self.file_size += (path/'#headers').stat().st_size
-        with open(path/'#headers', 'r') as headers_file:
-            self.headers = dict(line.strip().split(': ', 1)
-                                for line in headers_file)
-        if is_good_html_response(self):
-            with open(path/'#content', 'rb') as content_file:
-                self.content = content_file.read()
-                self.file_size += len(self.content)
-        print(
-            f'Present: status {self.status_code}; {len(self.content) if self.content else 0} bytes')
 
 
 def describe_progress(current_url: str, crawl: Crawl, stdscr):
