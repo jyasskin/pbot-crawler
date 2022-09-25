@@ -55,7 +55,7 @@ class Crawl:
     def is_complete(self):
         return len(self.pending) == 0 or (self.max_size is not None and self.total_size > self.max_size)
 
-    def add_pending(self, url):
+    def add_pending(self, url: str):
         if self.ok_to_crawl(url) and url not in self.complete:
             self.pending.add(url)
 
@@ -93,7 +93,11 @@ def fetch_one(crawl: Crawl, stdscr):
             # ones. We'll see if this misses anything important.
             if 'nofollow' in link.get('rel', []):
                 continue
-            href = urljoin(url, link['href'].strip())
+            try:
+                href = urljoin(url, link['href'].strip())
+            except whatwg_url.UrlParserError:
+                continue
+
             crawl.add_pending(clean_url(href).href)
 
 
@@ -161,7 +165,7 @@ class CachedResponse:
         self.content = None
 
         try:
-            print(f'Checking {path/"#status"} ... ', end='')
+            print(f'Checking {path/"#status"!a} ... ', end='')
             with open(path/'#status', 'r') as status_file:
                 self.status_code = int(status_file.read())
         except FileNotFoundError:
@@ -169,7 +173,7 @@ class CachedResponse:
             return
         self.file_size += (path/'#headers').stat().st_size
         with open(path/'#headers', 'r') as headers_file:
-            self.headers = dict(line.split(': ', 1)
+            self.headers = dict(line.strip().split(': ', 1)
                                 for line in headers_file)
         if is_good_html_response(self):
             with open(path/'#content', 'rb') as content_file:
@@ -191,7 +195,7 @@ def describe_progress(current_url: str, crawl: Crawl, stdscr):
         stdscr.refresh()
     else:
         print(
-            f'{len(crawl.pending)}/{len(crawl.complete)} resources left; {crawl.total_size} bytes; crawling {current_url}')
+            f'{len(crawl.pending)}/{len(crawl.complete)} resources left; {crawl.total_size} bytes; crawling {current_url!a}')
 
 
 def main(stdscr=None):
