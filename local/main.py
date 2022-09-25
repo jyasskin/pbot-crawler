@@ -2,6 +2,7 @@ import curses
 import re
 import sys
 import time
+import urllib.parse
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import List, Optional
@@ -93,7 +94,7 @@ def fetch_one(crawl: Crawl, stdscr):
             if 'nofollow' in link.get('rel', []):
                 continue
             href = urljoin(url, link['href'].strip())
-            crawl.add_pending(href)
+            crawl.add_pending(clean_url(href).href)
 
 
 def is_good_html_response(response):
@@ -127,11 +128,23 @@ def write_response(crawl: Crawl, response: requests.Response, path: Path):
     return None
 
 
-def urljoin(base, relative):
+def urljoin(base: str, relative: str) -> whatwg_url.Url:
     """Join a base URL and a relative URL, removing any fragments."""
     url = whatwg_url.parse_url(relative, base=base)
     url.fragment = None
-    return url.href
+    return url
+
+
+def clean_url(url: whatwg_url.Url) -> whatwg_url.Url:
+    """Removes query parameters that don't affect the resulting page."""
+    query = urllib.parse.parse_qs(url.query)
+    query.pop('utm_medium', None)
+    query.pop('utm_source', None)
+    query_str = urllib.parse.urlencode(query, doseq=True)
+    if query_str == '':
+        query_str = None
+    url.query = query_str
+    return url
 
 
 class CachedResponse:
