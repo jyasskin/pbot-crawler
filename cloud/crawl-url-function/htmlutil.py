@@ -1,11 +1,11 @@
 import urllib.parse
-from typing import Generator
+from typing import Iterator
 
 import whatwg_url
 from bs4 import BeautifulSoup
 
 
-def scrape_links(content: bytes, base_url: str) -> Generator[str]:
+def scrape_links(content: bytes, base_url: str) -> Iterator[str]:
     soup = BeautifulSoup(content, 'lxml')
     for link in soup.find_all('a', href=True):
         # Skip nofollow links. This isn't strictly required by the spec, but

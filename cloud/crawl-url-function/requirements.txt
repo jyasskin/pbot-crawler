@@ -1,8 +1,9 @@
-functions-framework==3.*
 beautifulsoup4==4.*
+functions-framework==3.*
+google-cloud-error-reporting==1.*
+google-cloud-firestore==2.*
+google-cloud-logging==3.*
+google-cloud-pubsub==2.*
 lxml==4.*
 requests==2.*
 whatwg-url==2018.8.26
-google-cloud-firestore==2.*
-google-cloud-error-reporting==1.*
-google-cloud-pubsub==2.*

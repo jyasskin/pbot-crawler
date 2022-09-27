@@ -2,13 +2,12 @@ import copy
 import os.path
 from enum import Enum, auto
 from hashlib import sha256
-from string import hexdigits
 from typing import Callable, Dict, Optional, Sequence
 
 import requests
 from google.cloud import firestore
 
-from .html import scrape_links
+from htmlutil import scrape_links
 
 
 def is_good_html_response(response):
@@ -52,8 +51,8 @@ class Response:
     url: str
     status_code: int
     headers: Dict[str, str]
-    content_reference: Optional[firestore.DocumentReference]
-    _links: Optional[Sequence[str]]
+    content_reference: Optional[firestore.DocumentReference] = None
+    _links: Optional[Sequence[str]] = None
 
     @property
     def links(self):
@@ -67,7 +66,6 @@ class CachedResponse(Response):
         """Loads a response from the current or previous crawl in Firestore if
         it was previously crawled.
         """
-        super().__init__(self)
         self.db = db
         self.url = url
         self.status_code = 0
@@ -78,13 +76,16 @@ class CachedResponse(Response):
         response_doc = read_one_firestore_doc(db.collection(
             f'crawl-{curr_crawl}').where('url', '==', self.url))
 
-        if response_doc.exists:
+        print(repr(response_doc))
+
+        if response_doc is not None:
             self.state = CacheState.FRESH
             return
 
         response_doc = read_one_firestore_doc(db.collection(
             f'crawl-{prev_crawl}').where('url', '==', self.url))
-        if response_doc.exists:
+        print(repr(response_doc))
+        if response_doc is not None:
             self.state = CacheState.STALE
         else:
             self.state = CacheState.ABSENT
@@ -157,7 +158,6 @@ class CachedResponse(Response):
 
 class FreshResponse(Response):
     def __init__(self, url: str):
-        super().__init__(self)
         self.url = url
         self.status_code = 0
         self.headers = {}
@@ -175,7 +175,7 @@ class FreshResponse(Response):
         })
 
 
-def read_one_firestore_doc(query: firestore.BaseQuery) -> Optional[firestore.DocumentSnapshot]:
+def read_one_firestore_doc(query: firestore.Query) -> Optional[firestore.DocumentSnapshot]:
     """Reads one document from a Firestore query, or returns None if there are no documents."""
     return next(query.limit(1).stream(), None)
 

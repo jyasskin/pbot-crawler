@@ -15,6 +15,7 @@ import whatwg_url
 from google.cloud import error_reporting, firestore, pubsub_v1
 
 from cache import Cache, CacheState
+from util import logger
 
 CLOUD_PROJECT = 'pbot-site-crawler'
 
@@ -45,9 +46,10 @@ crawl_topic_path = publisher.topic_path(CLOUD_PROJECT, 'crawl')
 def crawl_url(cloud_event):
     """Crawl one URL, received from a PubSub queue."""
     try:
-        data = json.loads(base64.b64decode(cloud_event.data))
+        logger.log_struct({'message': 'Invoked', 'data': cloud_event.data})
+        data = cloud_event.data
         current_crawl, prev_crawl = get_crawl(data)
-        url = data.url
+        url = data['url']
         assert ok_to_crawl(url), url
         if url in crawled_urls:
             return
@@ -69,6 +71,9 @@ def crawl_url(cloud_event):
                 publisher.publish(link)
         publisher.wait()
         # After we've published all the links, we can mark the URL as crawled.
+        logger.log_struct({
+            'message': 'Writing to Firestore',
+            'response': fresh_response})
         fresh_response.write_to_firestore()
 
     except Exception:
@@ -80,7 +85,7 @@ def get_crawl(data: dict) -> Tuple[str, str]:
     them if they're not present."""
     current_crawl = data.get('crawl', None)
     if current_crawl is None:
-        current_crawl = datetime.now(timezone.utc).date.isoformat()
+        current_crawl = datetime.now(timezone.utc).date().isoformat()
     prev_crawl = data.get('prev_crawl', None)
     if prev_crawl is None:
         for collection in db.collections():
@@ -121,7 +126,7 @@ class OutboundLinkPublisher:
     def publish(self, url: str) -> None:
         if ok_to_crawl(url) and url not in crawled_urls:
             data = json.dumps(
-                {'crawl': self.crawl, 'prev_crawl': self.prev_crawl, 'url': url})
+                {'crawl': self.current_crawl, 'prev_crawl': self.prev_crawl, 'url': url})
             self.publish_futures.append(publisher.publish(
                 crawl_topic_path, data.encode('utf-8')))
 
