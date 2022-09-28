@@ -20,4 +20,4 @@ start-emulator:
 test: test-crawl-url
 
 test-crawl-url:
-	cd crawl-url-function; test/emulate_servers.sh python -m pytest
+	cd crawl-url-function; test/emulate_servers.sh python -m pytest -v

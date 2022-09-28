@@ -152,7 +152,7 @@ class CachedResponse(Response):
         for to_copy in RELEVANT_HEADERS:
             value = src.get(to_copy, None)
             if value is not None:
-                dst.headers[to_copy] = value
+                dst[to_copy] = value
         return dst
 
 
@@ -167,7 +167,7 @@ class FreshResponse(Response):
         """Write a response to the current crawl's directory, making sure the
         content is in the content-addressed store.
         """
-        db.collection(f'crawl-{current_crawl}').document(sha256(self.url).hexdigest).set({
+        db.collection(f'crawl-{current_crawl}').document(sha256(self.url.encode()).hexdigest()).set({
             'url': self.url,
             'status_code': self.status_code,
             'headers': self.headers,
