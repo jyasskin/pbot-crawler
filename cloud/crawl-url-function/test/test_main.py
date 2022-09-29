@@ -1,5 +1,6 @@
+import base64
 import json
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 
 import main
@@ -20,11 +21,13 @@ def test_crawl_url(firestore_db, requests_mock, pull_from_crawl):
                                'content-type': 'text/html'},
                       content=PAGE_CONTENT)
 
-    event = CloudEvent({'type': '', 'source': ''}, {
-        'prev_crawl': '2022-09-26',
-        'crawl': '2022-09-27',
-        'url': firestore_db.TEST_PAGE1,
-    })
+    event = CloudEvent({'type': '', 'source': ''}, {'message': {
+        'data': base64.b64encode(json.dumps({
+            'prev_crawl': '2022-09-26',
+            'crawl': '2022-09-27',
+            'url': firestore_db.TEST_PAGE1,
+        }).encode())
+    }})
     main.do_crawl_url(event)
 
     assert [doc.path for doc in firestore_db.collection('crawl-2022-09-27').list_documents()] == [
@@ -46,3 +49,10 @@ def test_crawl_url(firestore_db, requests_mock, pull_from_crawl):
         'crawl': '2022-09-27',
         'url': TEST_LINK_TARGET,
     }
+
+
+def test_get_crawl(firestore_db):
+    curr_crawl, prev_crawl = main.get_crawl(
+        {'url': 'https://www.portland.gov/transportation'})
+    assert prev_crawl == '2022-09-26'
+    assert curr_crawl == datetime.now(tz=timezone.utc).date().isoformat()

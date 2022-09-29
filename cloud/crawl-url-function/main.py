@@ -1,3 +1,4 @@
+import base64
 import json
 import logging
 import os
@@ -8,8 +9,11 @@ from typing import Tuple
 from urllib.robotparser import RobotFileParser
 
 import functions_framework
+import google.auth.exceptions
 import requests
-from google.cloud import error_reporting, firestore, pubsub_v1
+from google.cloud import error_reporting, firestore
+from google.cloud import logging as cloud_logging
+from google.cloud import pubsub_v1
 
 import config
 from cache import Cache, CacheState
@@ -28,8 +32,13 @@ crawl_delay = timedelta(seconds=robots.crawl_delay(USER_AGENT) or 1)
 db = firestore.Client()
 cache = Cache(db)
 
-_error_reporting_client = error_reporting.Client(
-) if 'GOOGLE_APPLICATION_CREDENTIALS' in os.environ else None
+_error_reporting_client = None
+try:
+    _error_reporting_client = error_reporting.Client()
+    logging_client = cloud_logging.Client()
+    logging_client.setup_logging()
+except google.auth.exceptions.DefaultCredentialsError:
+    logging.basicConfig(level=logging.INFO)
 
 
 def report_exception():
@@ -54,9 +63,12 @@ def crawl_url(cloud_event):
 
 def do_crawl_url(cloud_event):
     logging.info('Invoked with %r', cloud_event.data)
-    data = cloud_event.data
+    data = json.loads(base64.b64decode(cloud_event.data['message']['data']))
     current_crawl, prev_crawl = get_crawl(data)
-    url = data['url']
+    try:
+        url = data['url']
+    except Exception as e:
+        raise RuntimeError(repr(data)) from e
     assert ok_to_crawl(url), url
     if url in crawled_urls:
         return
@@ -71,14 +83,16 @@ def do_crawl_url(cloud_event):
     fresh_response = cached_response.fetch(SESSION)
 
     if fresh_response.status_code//100 == 3:
-        publisher.publish(cached_response.headers['location'])
+        location = fresh_response.headers['location']
+        logging.info('Redirected to %r', fresh_response.headers['location'])
+        publisher.publish(location)
 
     if fresh_response.links:
+        logging.info('Queuing crawls of %r', fresh_response.links)
         for link in fresh_response.links:
             publisher.publish(link)
     publisher.wait()
     # After we've published all the links, we can mark the URL as crawled.
-    logging.info('Writing %r to Firestore', fresh_response)
     fresh_response.write_to_firestore(db, current_crawl)
 
 
@@ -93,7 +107,7 @@ def get_crawl(data: dict) -> Tuple[str, str]:
         for collection in db.collections():
             if not collection.id.startswith('crawl-'):
                 continue
-            collection_date = collection.id.remove_prefix('crawl-')
+            collection_date = collection.id[6:]
             if collection_date < current_crawl and (prev_crawl is None or collection_date > prev_crawl):
                 prev_crawl = collection_date
 

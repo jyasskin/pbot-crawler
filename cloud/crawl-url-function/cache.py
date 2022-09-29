@@ -76,15 +76,12 @@ class CachedResponse(Response):
         response_doc = read_one_firestore_doc(db.collection(
             f'crawl-{curr_crawl}').where('url', '==', self.url))
 
-        print(repr(response_doc))
-
         if response_doc is not None:
             self.state = CacheState.FRESH
             return
 
         response_doc = read_one_firestore_doc(db.collection(
             f'crawl-{prev_crawl}').where('url', '==', self.url))
-        print(repr(response_doc))
         if response_doc is not None:
             self.state = CacheState.STALE
         else:

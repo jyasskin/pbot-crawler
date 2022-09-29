@@ -21,3 +21,6 @@ test: test-crawl-url
 
 test-crawl-url:
 	cd crawl-url-function; test/emulate_servers.sh python -m pytest -v
+
+start-crawl:
+	gcloud pubsub topics publish crawl --project=$(PROJECT) --message='{"url": "https://www.portland.gov/transportation"}'
