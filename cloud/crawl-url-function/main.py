@@ -1,25 +1,18 @@
-import base64
-import contextlib
 import json
+import logging
+import os
 import time
-import urllib.parse
 from concurrent import futures
-from datetime import date, datetime, timedelta, timezone
-from pathlib import Path
-from typing import Generator, List, Literal, Optional, Tuple, Union
+from datetime import datetime, timedelta, timezone
+from typing import Tuple
 from urllib.robotparser import RobotFileParser
 
 import functions_framework
 import requests
-import whatwg_url
 from google.cloud import error_reporting, firestore, pubsub_v1
 
+import config
 from cache import Cache, CacheState
-from util import logger
-
-CLOUD_PROJECT = 'pbot-site-crawler'
-
-URL_ORIGIN = 'https://www.portland.gov/'
 
 SESSION = requests.Session()
 USER_AGENT = 'PBOT Crawler'
@@ -28,56 +21,65 @@ next_fetch = datetime.now(timezone.utc)
 
 crawled_urls = set()
 
-robots = RobotFileParser(URL_ORIGIN + 'robots.txt')
+robots = RobotFileParser(config.URL_ORIGIN + 'robots.txt')
 robots.read()
 crawl_delay = timedelta(seconds=robots.crawl_delay(USER_AGENT) or 1)
 
 db = firestore.Client()
 cache = Cache(db)
 
-error_reporting_client = error_reporting.Client()
+_error_reporting_client = error_reporting.Client(
+) if 'GOOGLE_APPLICATION_CREDENTIALS' in os.environ else None
+
+
+def report_exception():
+    if _error_reporting_client is not None:
+        _error_reporting_client.report_exception()
+    else:
+        logging.exception('Exception')
 
 
 publisher = pubsub_v1.PublisherClient()
-crawl_topic_path = publisher.topic_path(CLOUD_PROJECT, 'crawl')
+crawl_topic_path = publisher.topic_path(config.CLOUD_PROJECT, 'crawl')
 
 
 @functions_framework.cloud_event
 def crawl_url(cloud_event):
     """Crawl one URL, received from a PubSub queue."""
     try:
-        logger.log_struct({'message': 'Invoked', 'data': cloud_event.data})
-        data = cloud_event.data
-        current_crawl, prev_crawl = get_crawl(data)
-        url = data['url']
-        assert ok_to_crawl(url), url
-        if url in crawled_urls:
-            return
-
-        publisher = OutboundLinkPublisher(prev_crawl, current_crawl)
-        cached_response = cache.response_for(
-            url=url, prev_crawl=prev_crawl, curr_crawl=current_crawl)
-        if cached_response.state == CacheState.FRESH:
-            return
-
-        wait_for_next_fetch()
-        fresh_response = cached_response.fetch(SESSION)
-
-        if fresh_response.status_code//100 == 3:
-            publisher.publish(cached_response.headers['location'])
-
-        if fresh_response.links:
-            for link in fresh_response.links:
-                publisher.publish(link)
-        publisher.wait()
-        # After we've published all the links, we can mark the URL as crawled.
-        logger.log_struct({
-            'message': 'Writing to Firestore',
-            'response': fresh_response})
-        fresh_response.write_to_firestore()
-
+        do_crawl_url(cloud_event)
     except Exception:
-        error_reporting_client.report_exception()
+        report_exception()
+
+
+def do_crawl_url(cloud_event):
+    logging.info('Invoked with %r', cloud_event.data)
+    data = cloud_event.data
+    current_crawl, prev_crawl = get_crawl(data)
+    url = data['url']
+    assert ok_to_crawl(url), url
+    if url in crawled_urls:
+        return
+
+    publisher = OutboundLinkPublisher(prev_crawl, current_crawl)
+    cached_response = cache.response_for(
+        url=url, prev_crawl=prev_crawl, curr_crawl=current_crawl)
+    if cached_response.state == CacheState.FRESH:
+        return
+
+    wait_for_next_fetch()
+    fresh_response = cached_response.fetch(SESSION)
+
+    if fresh_response.status_code//100 == 3:
+        publisher.publish(cached_response.headers['location'])
+
+    if fresh_response.links:
+        for link in fresh_response.links:
+            publisher.publish(link)
+    publisher.wait()
+    # After we've published all the links, we can mark the URL as crawled.
+    logging.info('Writing %r to Firestore', fresh_response)
+    fresh_response.write_to_firestore(db, current_crawl)
 
 
 def get_crawl(data: dict) -> Tuple[str, str]:

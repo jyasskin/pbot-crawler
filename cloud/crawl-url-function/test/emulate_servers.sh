@@ -2,6 +2,8 @@
 #
 # Starts the PubSub emulator and then runs the remaining arguments.
 
+SCRIPTDIR=$(dirname "$BASH_SOURCE")
+
 if [ -z "$FIRESTORE_EMULATOR_HOST" -o -z "$PUBSUB_EMULATOR_HOST" ]; then
     firestore_env_file=$(mktemp)
     pubsub_out_file=$(mktemp)
@@ -27,7 +29,6 @@ if [ -z "$FIRESTORE_EMULATOR_HOST" -o -z "$PUBSUB_EMULATOR_HOST" ]; then
     $(grep "export FIRESTORE_EMULATOR_HOST" $firestore_env_file|sed -e 's/\[firestore]//')
 fi
 
-# Move this to a python script...
-#gcloud pubsub topics create crawl --project=$PROJECT
+$SCRIPTDIR/create_topic.py --project=$PROJECT --topic=crawl
 
 "$@"

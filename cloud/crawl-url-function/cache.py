@@ -1,5 +1,5 @@
 import copy
-import os.path
+import logging
 from enum import Enum, auto
 from hashlib import sha256
 from typing import Callable, Dict, Optional, Sequence
@@ -167,12 +167,16 @@ class FreshResponse(Response):
         """Write a response to the current crawl's directory, making sure the
         content is in the content-addressed store.
         """
+        logging.info('Writing %s to Firestore.', self)
         db.collection(f'crawl-{current_crawl}').document(sha256(self.url.encode()).hexdigest()).set({
             'url': self.url,
             'status_code': self.status_code,
             'headers': self.headers,
             'content': self.content_reference,
         })
+
+    def __str__(self):
+        return f'Response({{url={self.url}, status_code={self.status_code}, headers={self.headers}, content_reference={self.content_reference}}})'
 
 
 def read_one_firestore_doc(query: firestore.Query) -> Optional[firestore.DocumentSnapshot]:
