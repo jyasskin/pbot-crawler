@@ -2,15 +2,16 @@
   "type": "record",
   "name": "changed_pages",
   "fields": [
-    { "name": "crawl", "type": "int", "logicalType": "date" },
+    {
+      "name": "crawl",
+      "type": "string",
+      "doc": "the crawl's date in YYYY-MM-DD format"
+    },
     { "name": "page", "type": "string", "doc": "URL of the changed page" },
     {
       "name": "change",
-      "type": {
-        "type": "enum",
-        "name": "type_of_change",
-        "symbols": ["ADD", "DEL", "CHANGE"]
-      }
+      "type": "string",
+      "doc": "One of ADD, DEL, or CHANGE"
     }
   ]
 }

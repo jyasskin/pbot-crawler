@@ -3,11 +3,17 @@ export REGION:=us-west1
 
 deploy: deploy-crawl-url
 
-# Can only be run once. Don't attach a schema because it's impossible to change
-# schemas without deleting and recreating the topic.
-create-pubsub-topics:
-	gcloud pubsub topics create crawl --project=$(PROJECT)
-	gcloud pubsub topics create changed-pages --project=$(PROJECT)
+# Can only be run once.
+create-pubsub-topics: create-bigquery-tables
+	gcloud pubsub schemas create crawl --project=$(PROJECT) --type=AVRO "--definition=$$(cat crawl.avsc)"
+	gcloud pubsub topics create crawl --project=$(PROJECT) --schema=crawl --message-encoding=JSON
+	gcloud pubsub schemas create changed-pages --project=$(PROJECT) --type=AVRO "--definition=$$(cat changed-pages.avsc)"
+	gcloud pubsub topics create changed-pages --project=$(PROJECT) --schema=changed-pages --message-encoding=JSON
+	gcloud pubsub subscriptions create sub-changed-pages-bigquery --topic=changed-pages \
+		--bigquery-table=$(PROJECT):crawl.changed-pages --use-topic-schema --drop-unknown-fields
+
+create-bigquery-tables:
+	bq mk --table $(PROJECT):crawl.changed-pages crawl:DATE,page:STRING,change:STRING
 
 deploy-crawl-url:
 	gcloud functions deploy crawl-url --gen2 --project=$(PROJECT) --region=$(REGION) --runtime=python310 \
@@ -24,4 +30,4 @@ test-crawl-url:
 	cd crawl-url-function; test/emulate_servers.sh python -m pytest -v
 
 start-crawl:
-	gcloud pubsub topics publish crawl --project=$(PROJECT) --message='{"url": "https://www.portland.gov/transportation"}'
+	gcloud pubsub topics publish crawl --project=$(PROJECT) --message='{"url": "https://www.portland.gov/transportation", "crawl": "", "prev_crawl": ""}'

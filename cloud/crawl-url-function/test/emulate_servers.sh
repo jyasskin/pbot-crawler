@@ -29,7 +29,7 @@ if [ -z "$FIRESTORE_EMULATOR_HOST" -o -z "$PUBSUB_EMULATOR_HOST" ]; then
     $(grep "export FIRESTORE_EMULATOR_HOST" $firestore_env_file|sed -e 's/\[firestore]//')
 fi
 
-$SCRIPTDIR/create_topic.py --project=$PROJECT --topic=crawl
-$SCRIPTDIR/create_topic.py --project=$PROJECT --topic=changed-pages
+$SCRIPTDIR/create_topic.py --project=$PROJECT --topic=crawl --schema_id=crawl --schema=$SCRIPTDIR/../../crawl.avsc --message_encoding=json
+$SCRIPTDIR/create_topic.py --project=$PROJECT --topic=changed-pages --schema_id=changed-pages --schema=$SCRIPTDIR/../../changed-pages.avsc --message_encoding=json
 
 "$@"

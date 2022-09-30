@@ -1,10 +1,9 @@
 import base64
 import json
 import logging
-import os
 import time
 from concurrent import futures
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Tuple
 from urllib.robotparser import RobotFileParser
 
@@ -38,7 +37,7 @@ try:
     logging_client = cloud_logging.Client()
     logging_client.setup_logging()
 except google.auth.exceptions.DefaultCredentialsError:
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.DEBUG)
 
 
 def report_exception():
@@ -109,11 +108,11 @@ def do_crawl_url(cloud_event):
 def get_crawl(data: dict) -> Tuple[str, str]:
     """Get the current and previous crawls from the PubSub message, or select
     them if they're not present."""
-    current_crawl = data.get('crawl', None)
-    if current_crawl is None:
+    current_crawl = data.get('crawl', '')
+    if current_crawl == '':
         current_crawl = datetime.now(timezone.utc).date().isoformat()
-    prev_crawl = data.get('prev_crawl', None)
-    if prev_crawl is None:
+    prev_crawl = data.get('prev_crawl', '')
+    if prev_crawl == '':
         for collection in db.collections():
             if not collection.id.startswith('crawl-'):
                 continue
@@ -143,13 +142,15 @@ class SynchronousPublisher:
         self.publish_futures = []
 
     def publish(self, topic_path: str, message: bytes):
-        self.publish_futures.append(
-            self.publisher.publish(topic_path, message))
+        future = self.publisher.publish(topic_path, message)
+        self.publish_futures.append(future)
+        return future
 
     def wait(self):
         """Waits for all publications to finish."""
-        futures.wait(self.publish_futures,
-                     return_when=futures.ALL_COMPLETED)
+        for future in futures.as_completed(self.publish_futures, timeout=10):
+            # Raise any exceptions.
+            future.result()
         self.publish_futures = []
 
 
@@ -164,8 +165,10 @@ class OutboundLinkPublisher:
     def publish(self, url: str) -> None:
         if ok_to_crawl(url) and url not in crawled_urls:
             data = json.dumps(
-                {'crawl': self.current_crawl, 'prev_crawl': self.prev_crawl, 'url': url})
-            self.publisher.publish(crawl_topic_path, data.encode('utf-8'))
+                {'url': url, 'crawl': self.current_crawl, 'prev_crawl': self.prev_crawl})
+            logging.info('Publishing %s to %r', data, crawl_topic_path)
+            self.publisher.publish(
+                crawl_topic_path, data.encode('utf-8'))
 
 
 def publish_page_change(response: FreshResponse, publisher: SynchronousPublisher, current_crawl: str):
@@ -183,6 +186,7 @@ def publish_page_change(response: FreshResponse, publisher: SynchronousPublisher
     else:
         assert response.change == PresenceChange.CHANGED, response.change
         change_description['change'] = 'CHANGE'
+    logging.info('Publishing changed page: %s', json.dumps(change_description))
     publisher.publish(changed_pages_topic_path,
                       json.dumps(change_description).encode())
     # And ask the Web Archive to save a copy of the page.

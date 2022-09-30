@@ -5,13 +5,15 @@
     { "name": "url", "type": "string" },
     {
       "name": "crawl",
-      "type": ["null", "string"],
-      "doc": "null or the date of the active crawl in YYYY-MM-DD format"
+      "type": "string",
+      "doc": "\"\" or the date of the active crawl in YYYY-MM-DD format",
+      "default": ""
     },
     {
       "name": "prev_crawl",
-      "type": ["null", "string"],
-      "doc": "null or the date of the previous crawl in YYYY-MM-DD format"
+      "type": "string",
+      "doc": "\"\" or the date of the previous crawl in YYYY-MM-DD format",
+      "default": ""
     }
   ]
 }

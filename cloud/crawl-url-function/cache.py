@@ -139,21 +139,7 @@ class CachedResponse(Response):
                             response.content, base_url=result.url))
                     })['links']
 
-                # Record how the resource changed from the previous crawl to
-                # this one.
-                if self.state == CacheState.ABSENT and result.status_code >= 400:
-                    result.change = PresenceChange.SAME
-                elif self.state == CacheState.ABSENT:
-                    result.change = PresenceChange.NEW
-                else:
-                    assert self.state == CacheState.STALE
-                    if result.status_code >= 400:
-                        result.change = PresenceChange.REMOVED
-                    elif result.content_reference == self.content_reference:
-                        # This should have been a 304, but maybe the server's broken.
-                        result.change = PresenceChange.SAME
-                    else:
-                        result.change = PresenceChange.CHANGED
+                result.change = self._describe_change(result)
 
         return result
 
@@ -168,6 +154,21 @@ class CachedResponse(Response):
             if value is not None:
                 dst[to_copy] = value
         return dst
+
+    def _describe_change(self, fetch_result: 'FreshResponse') -> PresenceChange:
+        """Returns how the resource changed from the previous crawl to this one."""
+        if self.state == CacheState.ABSENT:
+            if fetch_result.status_code >= 400:
+                return PresenceChange.SAME
+            return PresenceChange.NEW
+
+        assert self.state == CacheState.STALE
+        if fetch_result.status_code >= 400:
+            return PresenceChange.REMOVED
+        if fetch_result.content_reference == self.content_reference:
+            # This should have been a 304, but maybe the server's broken.
+            return PresenceChange.SAME
+        return PresenceChange.CHANGED
 
 
 class FreshResponse(Response):
@@ -200,7 +201,7 @@ def read_one_firestore_doc(query: firestore.Query) -> Optional[firestore.Documen
 
 
 def set_if_absent(doc: firestore.DocumentReference, value_generator: Callable[[], dict]) -> dict:
-    """Sets thea key in a Firestore document if it doesn't already exist.
+    """Sets the value of a Firestore document if it doesn't already exist.
 
     Returns the content of the document.
     """
