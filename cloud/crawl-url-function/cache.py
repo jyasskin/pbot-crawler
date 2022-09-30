@@ -116,6 +116,7 @@ class CachedResponse(Response):
         # Fetch the URL for either STALE or ABSENT resources.
         with session.get(self.url, headers=headers, stream=True, allow_redirects=False) as response:
             if response.status_code == 304 and self.state == CacheState.STALE:
+                result.change = PresenceChange.SAME
                 result.status_code = 200
                 # Update stored headers as described by https://httpwg.org/specs/rfc9111.html#rfc.section.3.2
                 result.headers = self._update_relevant_headers(
@@ -138,6 +139,22 @@ class CachedResponse(Response):
                             response.content, base_url=result.url))
                     })['links']
 
+                # Record how the resource changed from the previous crawl to
+                # this one.
+                if self.state == CacheState.ABSENT and result.status_code >= 400:
+                    result.change = PresenceChange.SAME
+                elif self.state == CacheState.ABSENT:
+                    result.change = PresenceChange.NEW
+                else:
+                    assert self.state == CacheState.STALE
+                    if result.status_code >= 400:
+                        result.change = PresenceChange.REMOVED
+                    elif result.content_reference == self.content_reference:
+                        # This should have been a 304, but maybe the server's broken.
+                        result.change = PresenceChange.SAME
+                    else:
+                        result.change = PresenceChange.CHANGED
+
         return result
 
     @staticmethod
@@ -159,6 +176,7 @@ class FreshResponse(Response):
         self.status_code = 0
         self.headers = {}
         self.content_reference = None
+        self.change = PresenceChange.NEW
 
     def write_to_firestore(self, db: firestore.Client, current_crawl: str) -> None:
         """Write a response to the current crawl's directory, making sure the

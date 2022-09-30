@@ -5,8 +5,9 @@ deploy: deploy-crawl-url
 
 # Can only be run once. Don't attach a schema because it's impossible to change
 # schemas without deleting and recreating the topic.
-create-pubsub-topic:
+create-pubsub-topics:
 	gcloud pubsub topics create crawl --project=$(PROJECT)
+	gcloud pubsub topics create changed-pages --project=$(PROJECT)
 
 deploy-crawl-url:
 	gcloud functions deploy crawl-url --gen2 --project=$(PROJECT) --region=$(REGION) --runtime=python310 \

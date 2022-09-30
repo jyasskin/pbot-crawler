@@ -1,0 +1,16 @@
+{
+  "type": "record",
+  "name": "changed_pages",
+  "fields": [
+    { "name": "crawl", "type": "int", "logicalType": "date" },
+    { "name": "page", "type": "string", "doc": "URL of the changed page" },
+    {
+      "name": "change",
+      "type": {
+        "type": "enum",
+        "name": "type_of_change",
+        "symbols": ["ADD", "DEL", "CHANGE"]
+      }
+    }
+  ]
+}

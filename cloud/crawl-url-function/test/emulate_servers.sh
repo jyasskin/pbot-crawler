@@ -30,5 +30,6 @@ if [ -z "$FIRESTORE_EMULATOR_HOST" -o -z "$PUBSUB_EMULATOR_HOST" ]; then
 fi
 
 $SCRIPTDIR/create_topic.py --project=$PROJECT --topic=crawl
+$SCRIPTDIR/create_topic.py --project=$PROJECT --topic=changed-pages
 
 "$@"

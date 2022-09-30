@@ -39,11 +39,9 @@ def firestore_db():
                 doc.delete()
 
 
-@pytest.fixture
-def pull_from_crawl():
-    publisher = pubsub_v1.PublisherClient()
+def pull_from_topic(topic: str):
     subscriber = pubsub_v1.SubscriberClient()
-    topic_path = publisher.topic_path(config.CLOUD_PROJECT, 'crawl')
+    topic_path = subscriber.topic_path(config.CLOUD_PROJECT, topic)
 
     # Wrap the subscriber in a 'with' block to automatically call close() to
     # close the underlying gRPC channel when done.
@@ -54,7 +52,18 @@ def pull_from_crawl():
 
         def pull_one() -> google.pubsub_v1.types.ReceivedMessage:
             response = subscriber.pull(
-                request={"subscription": subscription.name, "max_messages": 1})
+                request={"subscription": subscription.name, "max_messages": 1},
+                timeout=10)
             return response.received_messages[0]
 
         yield pull_one
+
+
+@pytest.fixture
+def pull_from_crawl():
+    yield from pull_from_topic('crawl')
+
+
+@pytest.fixture
+def pull_from_changed_pages():
+    yield from pull_from_topic('changed-pages')

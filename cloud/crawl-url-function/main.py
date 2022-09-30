@@ -16,7 +16,7 @@ from google.cloud import logging as cloud_logging
 from google.cloud import pubsub_v1
 
 import config
-from cache import Cache, CacheState
+from cache import Cache, CacheState, FreshResponse, PresenceChange
 
 SESSION = requests.Session()
 USER_AGENT = 'PBOT Crawler'
@@ -50,6 +50,8 @@ def report_exception():
 
 publisher = pubsub_v1.PublisherClient()
 crawl_topic_path = publisher.topic_path(config.CLOUD_PROJECT, 'crawl')
+changed_pages_topic_path = publisher.topic_path(
+    config.CLOUD_PROJECT, 'changed-pages')
 
 
 @functions_framework.cloud_event
@@ -62,37 +64,45 @@ def crawl_url(cloud_event):
 
 
 def do_crawl_url(cloud_event):
-    logging.info('Invoked with %r', cloud_event.data)
-    data = json.loads(base64.b64decode(cloud_event.data['message']['data']))
-    current_crawl, prev_crawl = get_crawl(data)
     try:
-        url = data['url']
+        data = json.loads(base64.b64decode(
+            cloud_event.data['message']['data']))
     except Exception as e:
-        raise RuntimeError(repr(data)) from e
+        raise ValueError(
+            f'Invalid input: {cloud_event.data!r}', cloud_event.data) from e
+    logging.info('Invoked with %r', data)
+    current_crawl, prev_crawl = get_crawl(data)
+    url = data['url']
     assert ok_to_crawl(url), url
     if url in crawled_urls:
         return
 
-    publisher = OutboundLinkPublisher(prev_crawl, current_crawl)
+    sync_publisher = SynchronousPublisher(publisher)
+    link_publisher = OutboundLinkPublisher(
+        sync_publisher, prev_crawl, current_crawl)
     cached_response = cache.response_for(
         url=url, prev_crawl=prev_crawl, curr_crawl=current_crawl)
     if cached_response.state == CacheState.FRESH:
+        crawled_urls.add(url)
         return
 
     wait_for_next_fetch()
     fresh_response = cached_response.fetch(SESSION)
 
+    publish_page_change(fresh_response, sync_publisher, current_crawl)
+
     if fresh_response.status_code//100 == 3:
         location = fresh_response.headers['location']
         logging.info('Redirected to %r', fresh_response.headers['location'])
-        publisher.publish(location)
+        link_publisher.publish(location)
 
     if fresh_response.links:
         logging.info('Queuing crawls of %r', fresh_response.links)
         for link in fresh_response.links:
-            publisher.publish(link)
-    publisher.wait()
+            link_publisher.publish(link)
+    sync_publisher.wait()
     # After we've published all the links, we can mark the URL as crawled.
+    crawled_urls.add(url)
     fresh_response.write_to_firestore(db, current_crawl)
 
 
@@ -127,25 +137,55 @@ def wait_for_next_fetch():
     next_fetch = datetime.now(timezone.utc) + crawl_delay
 
 
+class SynchronousPublisher:
+    def __init__(self, publisher: pubsub_v1.PublisherClient):
+        self.publisher = publisher
+        self.publish_futures = []
+
+    def publish(self, topic_path: str, message: bytes):
+        self.publish_futures.append(
+            self.publisher.publish(topic_path, message))
+
+    def wait(self):
+        """Waits for all publications to finish."""
+        futures.wait(self.publish_futures,
+                     return_when=futures.ALL_COMPLETED)
+        self.publish_futures = []
+
+
 class OutboundLinkPublisher:
-    """Publishes crawled outbound links to the PubSub queue.
+    """Publishes crawled outbound links to the PubSub queue."""
 
-    Call self.wait() before returning from the Cloud Function to be sure the
-    publications make it up.
-    """
-
-    def __init__(self, prev_crawl: str, current_crawl: str):
+    def __init__(self, publisher, prev_crawl: str, current_crawl: str):
+        self.publisher = publisher
         self.prev_crawl = prev_crawl
         self.current_crawl = current_crawl
-        self.publish_futures = []
 
     def publish(self, url: str) -> None:
         if ok_to_crawl(url) and url not in crawled_urls:
             data = json.dumps(
                 {'crawl': self.current_crawl, 'prev_crawl': self.prev_crawl, 'url': url})
-            self.publish_futures.append(publisher.publish(
-                crawl_topic_path, data.encode('utf-8')))
+            self.publisher.publish(crawl_topic_path, data.encode('utf-8'))
 
-    def wait(self):
-        futures.wait(self.publish_futures,
-                     return_when=futures.ALL_COMPLETED)
+
+def publish_page_change(response: FreshResponse, publisher: SynchronousPublisher, current_crawl: str):
+    change_description = {
+        'crawl': current_crawl,
+        'page': response.url,
+    }
+    if response.change == PresenceChange.SAME:
+        # Don't record pages that haven't changed.
+        return
+    if response.change == PresenceChange.NEW:
+        change_description['change'] = 'ADD'
+    elif response.change == PresenceChange.REMOVED:
+        change_description['change'] = 'DEL'
+    else:
+        assert response.change == PresenceChange.CHANGED, response.change
+        change_description['change'] = 'CHANGE'
+    publisher.publish(changed_pages_topic_path,
+                      json.dumps(change_description).encode())
+    # And ask the Web Archive to save a copy of the page.
+    SESSION.post('https://web.archive.org/save/' + response.url,
+                 data={'url': response.url,
+                       'capture_all': 'on'})
