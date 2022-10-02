@@ -22,7 +22,7 @@ deploy-crawl-url:
 
 
 deploy-webserver:
-  gcloud run deploy webserver --project=$(PROJECT) --region=us-west1 --source webserver/ \
+	gcloud run deploy webserver --project=$(PROJECT) --region=us-west1 --source webserver/ \
 		--memory 512Mi --cpu 1
 
 start-emulator:

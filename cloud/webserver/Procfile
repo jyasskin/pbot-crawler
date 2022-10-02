@@ -1,0 +1,3 @@
+# For environments with multiple CPU cores, increase the number of workers
+# to be equal to the cores available.
+web: hypercorn --bind :$PORT --workers 1 main:app

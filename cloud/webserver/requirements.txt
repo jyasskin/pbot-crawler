@@ -1,2 +1,3 @@
-flask[async]==2.*
-gunicorn==20.*
+google-cloud-bigquery==3.*
+hypercorn<2.0
+quart<2.0
