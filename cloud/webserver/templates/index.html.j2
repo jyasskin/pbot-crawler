@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>PBOT Crawl Results</title>
+  <style>
+  </style>
+</head>
+<body>
+  <h1>PBOT Crawl Results</h1>
+
+  <p>Pages in the {{ crawl_date }} crawl, compared to the {{ prev_crawl_date }} crawl.
+
+  <p>All pages are under <code>https://www.portland.gov/</code>.
+
+  <section>
+    <h2>New pages</h2>
+    <ul>
+      {% for item in new_pages %}
+        <li><a href="{{item.url}}">{{item.url | without_origin}}</a> [<a href="{{item.url | web_archive(crawl_date)}}">Archive</a>]
+      {% endfor %}
+    </ul>
+    {% if more_new_pages %}
+      <p><a href="{{more_new_pages}}">More new pages</a>
+    {% endif %}
+  </section>
+
+  <section>
+    <h2>Removed pages</h2>
+    <ul>
+      {% for item in removed_pages %}
+        <li><a href="{{item.url}}">{{item.url | without_origin}}</a> [<a href="{{item.url | web_archive(prev_crawl_date)}}">Archive</a>]
+      {% endfor %}
+    </ul>
+    {% if more_removed_pages %}
+      <p><a href="{{more_removed_pages}}">More removed pages</a>
+    {% endif %}
+  </section>
+
+  <section>
+    <h2>Modified pages</h2>
+    <ul>
+      {% for item in modified_pages %}
+        <li><a href="{{item.url}}">{{item.url | without_origin}}</a>
+          [<a href="{{item.url | web_archive(prev_crawl_date)}}">Old</a>, <a href="{{item.url | web_archive(crawl_date)}}">New Archive</a>]
+      {% endfor %}
+    </ul>
+    {% if more_modified_pages %}
+      <p><a href="{{more_modified_pages}}">More modified pages</a>
+    {% endif %}
+  </section>
+</body>
+</html>

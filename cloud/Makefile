@@ -1,7 +1,7 @@
 export PROJECT:=pbot-site-crawler
 export REGION:=us-west1
 
-deploy: deploy-crawl-url
+deploy: deploy-crawl-url deploy-webserver
 
 # Can only be run once.
 create-pubsub-topics: create-bigquery-tables
@@ -20,6 +20,10 @@ deploy-crawl-url:
 		--source=crawl-url-function/ --entry-point=crawl_url \
 		--trigger-topic=crawl --max-instances=1 --memory=256Mi
 
+
+deploy-webserver:
+  gcloud run deploy webserver --project=$(PROJECT) --region=us-west1 --source webserver/ \
+		--memory 512Mi --cpu 1
 
 start-emulator:
 	gcloud beta emulators pubsub start --project=$(PROJECT)
