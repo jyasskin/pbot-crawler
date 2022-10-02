@@ -24,7 +24,7 @@ def test_crawl_url(firestore_db, requests_mock, pull_from_crawl, pull_from_chang
                       headers={'etag': firestore_db.THE_ETAG + ' next',
                                'content-type': 'text/html'},
                       content=PAGE_CONTENT)
-    requests_mock.post('https://web.archive.org/save/https://www.portland.gov/transportation',
+    requests_mock.get('https://web.archive.org/save/https://www.portland.gov/transportation',
                        status_code=200)
 
     event = CloudEvent({'type': '', 'source': ''}, {'message': {
@@ -76,7 +76,7 @@ def test_added_page(firestore_db, requests_mock, pull_from_changed_pages):
                       headers={'etag': 'an-etag',
                                'content-type': 'text/html'},
                       content='I am a page'.encode())
-    requests_mock.post('https://web.archive.org/save/' + PAGE_URL,
+    requests_mock.get('https://web.archive.org/save/' + PAGE_URL,
                        status_code=200)
 
     event = CloudEvent({'type': '', 'source': ''}, {'message': {
@@ -98,7 +98,7 @@ def test_added_page(firestore_db, requests_mock, pull_from_changed_pages):
 def test_removed_page(firestore_db, requests_mock, pull_from_changed_pages):
     requests_mock.get(firestore_db.TEST_PAGE1, request_headers={'if-none-match': firestore_db.THE_ETAG},
                       status_code=404)
-    requests_mock.post('https://web.archive.org/save/' + firestore_db.TEST_PAGE1,
+    requests_mock.get('https://web.archive.org/save/' + firestore_db.TEST_PAGE1,
                        status_code=200)
 
     event = CloudEvent({'type': '', 'source': ''}, {'message': {

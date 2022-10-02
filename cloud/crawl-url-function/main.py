@@ -18,13 +18,13 @@ import config
 from cache import Cache, CacheState, FreshResponse, PresenceChange
 
 SESSION = requests.Session()
-USER_AGENT = 'PBOT Crawler'
-SESSION.headers.update({'user-agent': USER_AGENT})
+USER_AGENT = "PBOT Crawler"
+SESSION.headers.update({"user-agent": USER_AGENT})
 next_fetch = datetime.now(timezone.utc)
 
 crawled_urls = set()
 
-robots = RobotFileParser(config.URL_ORIGIN + 'robots.txt')
+robots = RobotFileParser(config.URL_ORIGIN + "robots.txt")
 robots.read()
 crawl_delay = timedelta(seconds=robots.crawl_delay(USER_AGENT) or 1)
 
@@ -44,13 +44,12 @@ def report_exception():
     if _error_reporting_client is not None:
         _error_reporting_client.report_exception()
     else:
-        logging.exception('Exception')
+        logging.exception("Exception")
 
 
 publisher = pubsub_v1.PublisherClient()
-crawl_topic_path = publisher.topic_path(config.CLOUD_PROJECT, 'crawl')
-changed_pages_topic_path = publisher.topic_path(
-    config.CLOUD_PROJECT, 'changed-pages')
+crawl_topic_path = publisher.topic_path(config.CLOUD_PROJECT, "crawl")
+changed_pages_topic_path = publisher.topic_path(config.CLOUD_PROJECT, "changed-pages")
 
 
 @functions_framework.cloud_event
@@ -64,23 +63,23 @@ def crawl_url(cloud_event):
 
 def do_crawl_url(cloud_event):
     try:
-        data = json.loads(base64.b64decode(
-            cloud_event.data['message']['data']))
+        data = json.loads(base64.b64decode(cloud_event.data["message"]["data"]))
     except Exception as e:
         raise ValueError(
-            f'Invalid input: {cloud_event.data!r}', cloud_event.data) from e
-    logging.info('Invoked with %r', data)
+            f"Invalid input: {cloud_event.data!r}", cloud_event.data
+        ) from e
+    logging.info("Invoked with %r", data)
     current_crawl, prev_crawl = get_crawl(data)
-    url = data['url']
+    url = data["url"]
     assert ok_to_crawl(url), url
     if url in crawled_urls:
         return
 
     sync_publisher = SynchronousPublisher(publisher)
-    link_publisher = OutboundLinkPublisher(
-        sync_publisher, prev_crawl, current_crawl)
+    link_publisher = OutboundLinkPublisher(sync_publisher, prev_crawl, current_crawl)
     cached_response = cache.response_for(
-        url=url, prev_crawl=prev_crawl, curr_crawl=current_crawl)
+        url=url, prev_crawl=prev_crawl, curr_crawl=current_crawl
+    )
     if cached_response.state == CacheState.FRESH:
         crawled_urls.add(url)
         return
@@ -90,13 +89,13 @@ def do_crawl_url(cloud_event):
 
     publish_page_change(fresh_response, sync_publisher, current_crawl)
 
-    if fresh_response.status_code//100 == 3:
-        location = fresh_response.headers['location']
-        logging.info('Redirected to %r', fresh_response.headers['location'])
+    if fresh_response.status_code // 100 == 3:
+        location = fresh_response.headers["location"]
+        logging.info("Redirected to %r", fresh_response.headers["location"])
         link_publisher.publish(location)
 
     if fresh_response.links:
-        logging.info('Queuing crawls of %r', fresh_response.links)
+        logging.info("Queuing crawls of %r", fresh_response.links)
         for link in fresh_response.links:
             link_publisher.publish(link)
     sync_publisher.wait()
@@ -108,23 +107,27 @@ def do_crawl_url(cloud_event):
 def get_crawl(data: dict) -> Tuple[str, str]:
     """Get the current and previous crawls from the PubSub message, or select
     them if they're not present."""
-    current_crawl = data.get('crawl', '')
-    if current_crawl == '':
+    current_crawl = data.get("crawl", "")
+    if current_crawl == "":
         current_crawl = datetime.now(timezone.utc).date().isoformat()
-    prev_crawl = data.get('prev_crawl', '')
-    if prev_crawl == '':
+    prev_crawl = data.get("prev_crawl", "")
+    if prev_crawl == "":
         for collection in db.collections():
-            if not collection.id.startswith('crawl-'):
+            if not collection.id.startswith("crawl-"):
                 continue
             collection_date = collection.id[6:]
-            if collection_date < current_crawl and (prev_crawl is None or collection_date > prev_crawl):
+            if collection_date < current_crawl and (
+                prev_crawl is None or collection_date > prev_crawl
+            ):
                 prev_crawl = collection_date
 
     return current_crawl, prev_crawl
 
 
 def ok_to_crawl(url: str):
-    return url.startswith('https://www.portland.gov/transportation') and robots.can_fetch(USER_AGENT, url)
+    return url.startswith(
+        "https://www.portland.gov/transportation"
+    ) and robots.can_fetch(USER_AGENT, url)
 
 
 def wait_for_next_fetch():
@@ -165,31 +168,38 @@ class OutboundLinkPublisher:
     def publish(self, url: str) -> None:
         if ok_to_crawl(url) and url not in crawled_urls:
             data = json.dumps(
-                {'url': url, 'crawl': self.current_crawl, 'prev_crawl': self.prev_crawl})
-            logging.info('Publishing %s to %r', data, crawl_topic_path)
-            self.publisher.publish(
-                crawl_topic_path, data.encode('utf-8'))
+                {"url": url, "crawl": self.current_crawl, "prev_crawl": self.prev_crawl}
+            )
+            logging.info("Publishing %s to %r", data, crawl_topic_path)
+            self.publisher.publish(crawl_topic_path, data.encode("utf-8"))
 
 
-def publish_page_change(response: FreshResponse, publisher: SynchronousPublisher, current_crawl: str):
+def publish_page_change(
+    response: FreshResponse, publisher: SynchronousPublisher, current_crawl: str
+):
     change_description = {
-        'crawl': current_crawl,
-        'page': response.url,
+        "crawl": current_crawl,
+        "page": response.url,
     }
     if response.change == PresenceChange.SAME:
         # Don't record pages that haven't changed.
         return
     if response.change == PresenceChange.NEW:
-        change_description['change'] = 'ADD'
+        change_description["change"] = "ADD"
     elif response.change == PresenceChange.REMOVED:
-        change_description['change'] = 'DEL'
+        change_description["change"] = "DEL"
     else:
         assert response.change == PresenceChange.CHANGED, response.change
-        change_description['change'] = 'CHANGE'
-    logging.info('Publishing changed page: %s', json.dumps(change_description))
-    publisher.publish(changed_pages_topic_path,
-                      json.dumps(change_description).encode())
+        change_description["change"] = "CHANGE"
+    logging.info("Publishing changed page: %s", json.dumps(change_description))
+    publisher.publish(changed_pages_topic_path, json.dumps(change_description).encode())
     # And ask the Web Archive to save a copy of the page.
-    SESSION.post('https://web.archive.org/save/' + response.url,
-                 data={'url': response.url,
-                       'capture_all': 'on'})
+    archive_result = SESSION.get(
+        "https://web.archive.org/save/" + response.url,
+        # data={"url": response.url, "capture_all": "on"},
+        allow_redirects=False,
+    )
+    if archive_result.status_code >= 200:
+        logging.error(
+            f"Failed to archive {response.url!r}: {archive_result.status_code}, {archive_result.headers!r}"
+        )
