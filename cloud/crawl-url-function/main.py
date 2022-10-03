@@ -199,7 +199,7 @@ def publish_page_change(
         # data={"url": response.url, "capture_all": "on"},
         allow_redirects=False,
     )
-    if archive_result.status_code >= 200:
+    if archive_result.status_code >= 400:
         logging.error(
             f"Failed to archive {response.url!r}: {archive_result.status_code}, {archive_result.headers!r}"
         )
