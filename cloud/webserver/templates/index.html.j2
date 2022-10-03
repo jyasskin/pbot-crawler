@@ -21,7 +21,7 @@
       {% endfor %}
     </ul>
     {% if new_pages().more_available %}
-      <p><a href="{{new_pages.more_available}}">More new pages</a>
+      <p><a href="{{more_new_pages}}">More new pages</a>
     {% endif %}
   </section>
 
@@ -33,7 +33,7 @@
       {% endfor %}
     </ul>
     {% if removed_pages().more_available %}
-      <p><a href="{{removed_pages.more_available}}">More removed pages</a>
+      <p><a href="{{more_removed_pages}}">More removed pages</a>
     {% endif %}
   </section>
 
@@ -46,7 +46,7 @@
       {% endfor %}
     </ul>
     {% if modified_pages().more_available %}
-      <p><a href="{{modified_pages.more_available}}">More modified pages</a>
+      <p><a href="{{more_modified_pages}}">More modified pages</a>
     {% endif %}
   </section>
 </body>

@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <title>PBOT Crawl Results</title>
+  <style>
+  </style>
+</head>
+
+<body>
+  <h1>{{ title }}</h1>
+
+  <p>Compared to the {{ crawl_dates.prev_crawl }} crawl.
+
+  <p>All pages are under <code>https://www.portland.gov/</code>.
+
+  <ul>
+    {% for item in pages().pages %}
+    <li><a href="{{item.page}}">{{item.page | without_origin}}</a> [{% if old_archive %}<a
+        href="{{item.page | web_archive(crawl_dates.prev_crawl)}}">{{old_archive}}</a>{% endif %}{%if old_archive and
+      new_archive %},
+      {%endif%}{% if new_archive %}<a
+        href="{{item.page | web_archive(crawl_dates.current_crawl)}}">{{new_archive}}</a>{% endif %}]
+      {% endfor %}
+  </ul>
+</body>
+
+</html>
