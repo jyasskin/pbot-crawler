@@ -26,7 +26,7 @@ crawled_urls = set()
 
 robots = RobotFileParser(config.URL_ORIGIN + "robots.txt")
 robots.read()
-crawl_delay = timedelta(seconds=robots.crawl_delay(USER_AGENT) or 1)
+crawl_delay = timedelta(seconds=float(robots.crawl_delay(USER_AGENT) or 1))
 
 db = firestore.Client()
 cache = Cache(db)
