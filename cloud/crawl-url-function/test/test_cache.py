@@ -74,7 +74,7 @@ def test_cached_response_fetch_200(firestore_db, requests_mock):
         'links': [
             TEST_LINK_TARGET,
         ],
-        'content': PAGE_CONTENT,
+        'content': PAGE_CONTENT.decode(),
     }
 
 

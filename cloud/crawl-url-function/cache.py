@@ -152,7 +152,7 @@ class CachedResponse(Response):
                         result.content_reference,
                         lambda: {
                             "links": list(scrape_links(content, base_url=result.url)),
-                            "content": content,
+                            "content": content.decode("utf-8", errors="backslashreplace"),
                         },
                     )["links"]
 
@@ -215,7 +215,10 @@ class FreshResponse(Response):
         )
 
     def __str__(self):
-        return f"Response({{url={self.url}, status_code={self.status_code}, headers={self.headers}, content_reference={self.content_reference}}})"
+        content_reference = None
+        if self.content_reference:
+            content_reference = self.content_reference.path
+        return f"Response({{url={self.url}, status_code={self.status_code}, headers={self.headers}, content_reference={content_reference}}})"
 
 
 def read_one_firestore_doc(
