@@ -64,6 +64,7 @@ def test_cached_response_fetch_200(firestore_db, requests_mock):
         'etag': firestore_db.THE_ETAG + ' next',
         'content-type': 'text/html; param',
     }
+    assert fresh.content_reference is not None
     assert fresh.content_reference == firestore_db.collection(
         'content').document(sha256(PAGE_CONTENT).hexdigest())
     assert fresh.links == [
@@ -72,7 +73,8 @@ def test_cached_response_fetch_200(firestore_db, requests_mock):
     assert fresh.content_reference.get().to_dict() == {
         'links': [
             TEST_LINK_TARGET,
-        ]
+        ],
+        'content': PAGE_CONTENT,
     }
 
 

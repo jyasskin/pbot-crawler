@@ -9,7 +9,7 @@ import requests
 from google.cloud import firestore
 from requests.structures import CaseInsensitiveDict
 
-from htmlutil import scrape_links
+from htmlutil import clean_content, scrape_links
 
 
 def is_good_html_response(response):
@@ -141,18 +141,18 @@ class CachedResponse(Response):
                 result.content_reference = None
                 # We don't need the content of non-HTML files or failed responses.
                 if is_good_html_response(response):
+                    content = clean_content(response.content)
                     result.content_reference = self.db.collection("content").document(
-                        sha256(response.content).hexdigest()
+                        sha256(content).hexdigest()
                     )
-                    # Go ahead and write the links to the database. The
+                    # Go ahead and write the links and content to the database. The
                     # content-addressed store isn't used for signaling any part
                     # of the crawl, and we'll definitely need the outbound links.
                     result._links = set_if_absent(
                         result.content_reference,
                         lambda: {
-                            "links": list(
-                                scrape_links(response.content, base_url=result.url)
-                            )
+                            "links": list(scrape_links(content, base_url=result.url)),
+                            "content": content,
                         },
                     )["links"]
 

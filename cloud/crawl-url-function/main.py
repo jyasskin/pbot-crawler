@@ -203,3 +203,9 @@ def publish_page_change(
         logging.error(
             f"Failed to archive {response.url!r}: {archive_result.status_code}, {archive_result.headers!r}"
         )
+    elif "location" in archive_result.headers:
+        logging.info(f"Archived to {archive_result.headers['location']}")
+    else:
+        logging.warning(
+            f"Something odd with archiving {response.url!r}: {archive_result.status_code}, {archive_result.headers!r}"
+        )
