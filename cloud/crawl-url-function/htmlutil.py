@@ -50,4 +50,6 @@ def clean_content(content: bytes) -> bytes:
         b"",
         content,
     )
+    content = re.sub(rb"drawer--\d+", b"drawer--0000000000", content)
+    content = re.sub(rb"\s+\n", b"\n", content)
     return content

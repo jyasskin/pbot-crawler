@@ -26,3 +26,38 @@ def test_nreum():
         )
         == rb"""<script type="text/javascript">window.NREUM||(NREUM={});NREUM.info={"beacon":"bam.nr-data.net","licenseKey":"959a8d97de","applicationID":"146857664","transactionName":"YlRaMUNYWhZRUBVaX1seeQZFUFsLH3cTRkBUXWQmXktROXVdFVpETG17Cl9NRgpcXwRBbHBfTAxFQGIMVUQiXF5BQ1cJXVxGSA5FCFZH","queueTime":0,"atts":"ThNZRwtCSRg=","errorBeacon":"bam.nr-data.net","agent":""}</script></body>"""
     )
+
+
+def test_drawer():
+    assert (
+        clean_content(
+            rb"""<button
+    role="button"
+    class="drawer__open drawer__open--position-right btn btn-lg"
+    data-target=".drawer--1242721986"
+    aria-label="Open filters"
+    aria-pressed="false"
+    aria-expanded="false"
+  ><span class="icon icon--size-s"><svg id="icon-filter" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" viewBox="0 0 16 16" width="16" height="16"><title>filter</title><path fill="currentColor" d="M15.5 12H5V11.5C5" /></svg></span><span>Filters</span></button><div
+    class="drawer--1242721986 drawer drawer--position-right col-lg-4"
+    aria-labelledby="drawer__open"
+"""
+        )
+        == rb"""<button
+    role="button"
+    class="drawer__open drawer__open--position-right btn btn-lg"
+    data-target=".drawer--0000000000"
+    aria-label="Open filters"
+    aria-pressed="false"
+    aria-expanded="false"
+  ><span class="icon icon--size-s"><svg id="icon-filter" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" viewBox="0 0 16 16" width="16" height="16"><title>filter</title><path fill="currentColor" d="M15.5 12H5V11.5C5" /></svg></span><span>Filters</span></button><div
+    class="drawer--0000000000 drawer drawer--position-right col-lg-4"
+    aria-labelledby="drawer__open"
+"""
+    )
+
+
+def test_trailing_space():
+    assert (
+        clean_content(b""" <elem>    \n    \n  text  \n""") == b""" <elem>\n  text\n"""
+    )

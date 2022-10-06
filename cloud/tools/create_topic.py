@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 
 import argparse
+from typing import Any
 
 import google.api_core.exceptions
 from google.cloud import pubsub_v1
@@ -22,7 +23,7 @@ args = parser.parse_args()
 
 publisher = pubsub_v1.PublisherClient()
 topic_path = publisher.topic_path(args.project, args.topic)
-request = {"name": topic_path}
+request: dict[str, Any] = {"name": topic_path}
 try:
     publisher.delete_topic(topic=topic_path)
 except google.api_core.exceptions.NotFound:
