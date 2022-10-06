@@ -44,7 +44,7 @@ def clean_content(content: bytes) -> bytes:
             [
                 rb"(?:js-view-dom-id-|views_dom_id:)[0-9a-f]+",
                 rb',"view_dom_id":"[0-9a-f]+"',
-                rb',"applicationTime":\d+',
+                rb'<script .+?NREUM.+?</script>',
             ]
         ),
         b"",

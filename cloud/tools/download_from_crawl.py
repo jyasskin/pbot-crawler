@@ -30,8 +30,6 @@ crawl_info: firestore.DocumentSnapshot = (
     .get()
 )
 
-print(crawl_info.reference.path)
-
 if not crawl_info.exists:
     sys.exit(f"Can't find {args.url} in the crawl")
 

@@ -24,7 +24,7 @@ def test_nreum():
         clean_content(
             rb"""<script type="text/javascript">window.NREUM||(NREUM={});NREUM.info={"beacon":"bam.nr-data.net","licenseKey":"959a8d97de","applicationID":"146857664","transactionName":"YlRaMUNYWhZRUBVaX1seeQZFUFsLH3cTRkBUXWQmXktROXVdFVpETG17Cl9NRgpcXwRBbHBfTAxFQGIMVUQiXF5BQ1cJXVxGSA5FCFZH","queueTime":0,"applicationTime":654,"atts":"ThNZRwtCSRg=","errorBeacon":"bam.nr-data.net","agent":""}</script></body>"""
         )
-        == rb"""<script type="text/javascript">window.NREUM||(NREUM={});NREUM.info={"beacon":"bam.nr-data.net","licenseKey":"959a8d97de","applicationID":"146857664","transactionName":"YlRaMUNYWhZRUBVaX1seeQZFUFsLH3cTRkBUXWQmXktROXVdFVpETG17Cl9NRgpcXwRBbHBfTAxFQGIMVUQiXF5BQ1cJXVxGSA5FCFZH","queueTime":0,"atts":"ThNZRwtCSRg=","errorBeacon":"bam.nr-data.net","agent":""}</script></body>"""
+        == rb"""</body>"""
     )
 
 
