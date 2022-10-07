@@ -1,4 +1,11 @@
-from htmlutil import clean_content
+from htmlutil import clean_content, urljoin
+
+
+def test_urljoin():
+    assert (
+        urljoin("http://example.com/transportation", "tel:1234567890").href
+        == "tel:1234567890"
+    )
 
 
 def test_drupal():
@@ -54,10 +61,4 @@ def test_drawer():
     class="drawer--0000000000 drawer drawer--position-right col-lg-4"
     aria-labelledby="drawer__open"
 """
-    )
-
-
-def test_trailing_space():
-    assert (
-        clean_content(b""" <elem>    \n    \n  text  \n""") == b""" <elem>\n  text\n"""
     )

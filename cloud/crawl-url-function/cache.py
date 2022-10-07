@@ -9,7 +9,7 @@ import requests
 from google.cloud import firestore
 from requests.structures import CaseInsensitiveDict
 
-from htmlutil import clean_content, scrape_links
+from htmlutil import HtmlProcessor
 
 
 def is_good_html_response(response):
@@ -57,6 +57,7 @@ class Response:
     status_code: int
     headers: Dict[str, str]
     content_reference: Optional[firestore.DocumentReference] = None
+    text_content_reference: Optional[firestore.DocumentReference] = None
     _links: Optional[Sequence[str]] = None
 
     @property
@@ -78,6 +79,7 @@ class CachedResponse(Response):
         self.status_code = 0
         self.headers: Dict[str, str] = {}
         self.content_reference: Optional[firestore.DocumentReference] = None
+        self.text_content_reference: Optional[firestore.DocumentReference] = None
         self.state = CacheState.ABSENT
 
         response_doc = read_one_firestore_doc(
@@ -108,6 +110,10 @@ class CachedResponse(Response):
 
         if is_good_html_response(self):
             self.content_reference = response_doc.get("content")
+            try:
+                self.text_content_reference = response_doc.get("text_content")
+            except KeyError:
+                self.text_content_reference = None
 
     def fetch(self, session: requests.Session) -> "FreshResponse":
         """Freshens this resource from the network."""
@@ -135,26 +141,38 @@ class CachedResponse(Response):
                     copy.deepcopy(self.headers), response.headers
                 )
                 result.content_reference = self.content_reference
+                result.text_content_reference = self.text_content_reference
             else:
                 result.status_code = response.status_code
                 result.headers = self._update_relevant_headers({}, response.headers)
                 result.content_reference = None
+                result.text_content_reference = None
                 # We don't need the content of non-HTML files or failed responses.
                 if is_good_html_response(response):
-                    content = clean_content(response.content)
+                    processor = HtmlProcessor(response.content, result.url)
+                    markdown = processor.get_markdown()
                     result.content_reference = self.db.collection("content").document(
-                        sha256(content).hexdigest()
+                        sha256(processor.content).hexdigest()
                     )
+                    result.text_content_reference = self.db.collection(
+                        "text_content"
+                    ).document(sha256(markdown.encode()).hexdigest())
                     # Go ahead and write the links and content to the database. The
                     # content-addressed store isn't used for signaling any part
                     # of the crawl, and we'll definitely need the outbound links.
                     result._links = set_if_absent(
                         result.content_reference,
                         lambda: {
-                            "links": list(scrape_links(content, base_url=result.url)),
-                            "content": content.decode("utf-8", errors="backslashreplace"),
+                            "links": list(processor.scrape_links()),
+                            "content": processor.content.decode(
+                                processor.encoding, errors="backslashreplace"
+                            ),
                         },
                     )["links"]
+                    set_if_absent(
+                        result.text_content_reference,
+                        lambda: {"text": markdown},
+                    )
 
                 result.change = self._describe_change(result)
 
@@ -184,8 +202,13 @@ class CachedResponse(Response):
         assert self.state == CacheState.STALE
         if fetch_result.status_code >= 400:
             return PresenceChange.REMOVED
-        if fetch_result.content_reference == self.content_reference:
-            # This should have been a 304, but maybe the server's broken.
+        if (
+            fetch_result.content_reference == self.content_reference
+            or fetch_result.text_content_reference == self.text_content_reference
+            or fetch_result.content_reference == self.text_content_reference
+            or fetch_result.text_content_reference == self.content_reference
+        ):
+            # Ignore changes that don't affect the text.
             return PresenceChange.SAME
         return PresenceChange.CHANGED
 
@@ -211,6 +234,7 @@ class FreshResponse(Response):
                 "status_code": self.status_code,
                 "headers": self.headers,
                 "content": self.content_reference,
+                "text_content": self.text_content_reference,
             }
         )
 
@@ -218,7 +242,14 @@ class FreshResponse(Response):
         content_reference = None
         if self.content_reference:
             content_reference = self.content_reference.path
-        return f"Response({{url={self.url}, status_code={self.status_code}, headers={self.headers}, content_reference={content_reference}}})"
+        text_content_reference = None
+        if self.text_content_reference:
+            text_content_reference = self.text_content_reference.path
+        return (
+            f"Response({{url={self.url}, status_code={self.status_code}, "
+            + f"headers={self.headers}, content_reference={content_reference}, "
+            + f"text_content_reference={text_content_reference}}})"
+        )
 
 
 def read_one_firestore_doc(

@@ -15,6 +15,9 @@ parser.add_argument(
 )
 parser.add_argument("url", type=str, help="Crawled URL to download")
 parser.add_argument(
+    "--raw", help="Download the raw HTML instead of the markdown version"
+)
+parser.add_argument(
     "-o",
     type=argparse.FileType(mode="w"),
     default="-",
@@ -33,14 +36,21 @@ crawl_info: firestore.DocumentSnapshot = (
 if not crawl_info.exists:
     sys.exit(f"Can't find {args.url} in the crawl")
 
-content_ref: firestore.DocumentReference = crawl_info.get("content")
-if content_ref is None:
-    sys.exit(f"{args.url} didn't return content")
-content_snapshot = content_ref.get()
-if not content_snapshot.exists:
-    sys.exit(f"Didn't save content for {args.url}")
-content: Union[bytes, str] = content_snapshot.get("content")
-if isinstance(content, bytes):
-    # A couple documents got saved as bytes.
-    content = content.decode()
-args.o.write(content)
+if args.raw:
+    content_ref: firestore.DocumentReference = crawl_info.get("content")
+    if content_ref is None:
+        sys.exit(f"{args.url} didn't return content")
+    content_snapshot = content_ref.get()
+    if not content_snapshot.exists:
+        sys.exit(f"Didn't save content for {args.url}")
+    content: str = content_snapshot.get("content")
+    args.o.write(content)
+else:
+    text_content_ref: firestore.DocumentReference = crawl_info.get("text_content")
+    if text_content_ref is None:
+        sys.exit(f"{args.url} didn't return text content")
+    text_content_snapshot = text_content_ref.get()
+    if not text_content_snapshot.exists:
+        sys.exit(f"Didn't save text content for {args.url}")
+    text_content: str = text_content_snapshot.get("text")
+    args.o.write(text_content)

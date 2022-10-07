@@ -20,6 +20,7 @@ def reset_crawled_urls():
 def test_crawl_url(firestore_db, requests_mock, pull_from_crawl, pull_from_changed_pages):
     TEST_LINK_TARGET = 'https://www.portland.gov/transportation/page3'
     PAGE_CONTENT = f'<a href="{TEST_LINK_TARGET}">Link</a>'.encode()
+    PAGE_MARKDOWN=f'[Link]({TEST_LINK_TARGET})\n\n'.encode()
     requests_mock.get(firestore_db.TEST_PAGE1, request_headers={'if-none-match': firestore_db.THE_ETAG},
                       headers={'etag': firestore_db.THE_ETAG + ' next',
                                'content-type': 'text/html'},
@@ -48,6 +49,7 @@ def test_crawl_url(firestore_db, requests_mock, pull_from_crawl, pull_from_chang
             'content-type': 'text/html'
         },
         'content': firestore_db.collection('content').document(sha256(PAGE_CONTENT).hexdigest()),
+        'text_content': firestore_db.collection('text_content').document(sha256(PAGE_MARKDOWN).hexdigest()),
     }
 
     assert json.loads(pull_from_crawl().message.data) == {

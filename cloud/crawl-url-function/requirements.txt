@@ -4,6 +4,7 @@ google-cloud-error-reporting==1.*
 google-cloud-firestore==2.*
 google-cloud-logging==3.*
 google-cloud-pubsub==2.*
+html2text==2020.1.16
 lxml==4.*
 requests==2.*
 whatwg-url==2018.8.26

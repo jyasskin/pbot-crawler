@@ -2,23 +2,36 @@ import re
 import urllib.parse
 from typing import Iterator
 
+import html2text
 import whatwg_url
 from bs4 import BeautifulSoup
 
 
-def scrape_links(content: bytes, base_url: str) -> Iterator[str]:
-    soup = BeautifulSoup(content, "lxml")
-    for link in soup.find_all("a", href=True):
-        # Skip nofollow links. This isn't strictly required by the spec, but
-        # nofollow links seem less valuable, so we can focus on the other
-        # ones. We'll see if this misses anything important.
-        if "nofollow" in link.get("rel", []):
-            continue
-        try:
-            href = urljoin(base_url, link["href"].strip())
-        except whatwg_url.UrlParserError:
-            continue
-        yield clean_url(href).href
+class HtmlProcessor:
+    def __init__(self, content: bytes, base_url: str):
+        self.content = clean_content(content)
+        self.base_url = base_url
+        self.soup = BeautifulSoup(content, "lxml")
+        self.encoding = str(self.soup.original_encoding or "utf-8")
+
+    def scrape_links(self) -> Iterator[str]:
+        for link in self.soup.find_all("a", href=True):
+            # Skip nofollow links. This isn't strictly required by the spec, but
+            # nofollow links seem less valuable, so we can focus on the other
+            # ones. We'll see if this misses anything important.
+            if "nofollow" in link.get("rel", []):
+                continue
+            try:
+                href = urljoin(self.base_url, link["href"].strip())
+            except whatwg_url.UrlParserError:
+                continue
+            yield clean_url(href).href
+
+    def get_markdown(self) -> str:
+        return html2text.html2text(
+            self.content.decode(self.encoding, errors="backslashreplace"),
+            baseurl=self.base_url,
+        )
 
 
 def urljoin(base: str, relative: str) -> whatwg_url.Url:
@@ -44,12 +57,11 @@ def clean_content(content: bytes) -> bytes:
             [
                 rb"(?:js-view-dom-id-|views_dom_id:)[0-9a-f]+",
                 rb',"view_dom_id":"[0-9a-f]+"',
-                rb'<script .+?NREUM.+?</script>',
+                rb"<script .+?NREUM.+?</script>",
             ]
         ),
         b"",
         content,
     )
     content = re.sub(rb"drawer--\d+", b"drawer--0000000000", content)
-    content = re.sub(rb"\s+\n", b"\n", content)
     return content
