@@ -2,6 +2,7 @@ import base64
 import json
 import logging
 import time
+import traceback
 from concurrent import futures
 from datetime import date, datetime, timedelta, timezone
 from typing import Tuple
@@ -47,9 +48,46 @@ def report_exception():
         logging.exception("Exception")
 
 
-publisher = pubsub_v1.PublisherClient()
+batch_settings = pubsub_v1.types.BatchSettings(max_messages=1000)
+publisher = pubsub_v1.PublisherClient(batch_settings)
 crawl_topic_path = publisher.topic_path(config.CLOUD_PROJECT, "crawl")
 changed_pages_topic_path = publisher.topic_path(config.CLOUD_PROJECT, "changed-pages")
+
+
+@functions_framework.http
+def start_crawl(request):
+    """Start today's crawl."""
+    try:
+        if request.method != "POST":
+            return "Method not allowed\n", 405
+        do_start_crawl()
+        return "Done\n", 200
+    except Exception:
+        report_exception()
+        return traceback.format_exc(), 500
+
+
+def do_start_crawl():
+    current_crawl, prev_crawl = get_crawl({})
+    logging.info(
+        "Starting crawl %s; queuing existing pages from %s crawl.",
+        current_crawl,
+        prev_crawl,
+    )
+    sync_publisher = SynchronousPublisher(publisher)
+    link_publisher = OutboundLinkPublisher(sync_publisher, prev_crawl, current_crawl)
+    # Make sure the crawl is never empty.
+    link_publisher.publish("https://www.portland.gov/transportation")
+    # Check all known pages.
+    for existing_page in (
+        db.collection(f"crawl-{prev_crawl}")
+        .where("status_code", "<", 400)
+        .select(["url"])
+        .stream()
+    ):
+        link_publisher.publish(existing_page.get("url"))
+    logging.info("Waiting to publish %d existing pages.", len(sync_publisher))
+    sync_publisher.wait()
 
 
 @functions_framework.cloud_event
@@ -148,6 +186,9 @@ class SynchronousPublisher:
         future = self.publisher.publish(topic_path, message)
         self.publish_futures.append(future)
         return future
+
+    def __len__(self):
+        return len(self.publish_futures)
 
     def wait(self):
         """Waits for all publications to finish."""

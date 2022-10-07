@@ -1,7 +1,7 @@
 export PROJECT:=pbot-site-crawler
 export REGION:=us-west1
 
-deploy: deploy-crawl-url deploy-webserver
+deploy: deploy-crawl-url deploy-start-crawl deploy-webserver
 
 # Can only be run once.
 create-pubsub-topics: create-bigquery-tables
@@ -20,6 +20,11 @@ deploy-crawl-url:
 		--source=crawl-url-function/ --entry-point=crawl_url \
 		--trigger-topic=crawl --max-instances=1 --memory=256Mi
 
+deploy-start-crawl:
+	gcloud functions deploy start-crawl --gen2 --project=$(PROJECT) --region=$(REGION) --runtime=python310 \
+		--source=crawl-url-function/ --entry-point=start_crawl --trigger-http \
+		--max-instances=1 --memory=256Mi
+
 
 deploy-webserver:
 	gcloud run deploy webserver --project=$(PROJECT) --region=us-west1 --source webserver/ \
@@ -34,4 +39,5 @@ test-crawl-url:
 	cd crawl-url-function; ../tools/emulate_servers.sh python -m pytest -vv
 
 start-crawl:
-	gcloud pubsub topics publish crawl --project=$(PROJECT) --message='{"url": "https://www.portland.gov/transportation", "crawl": "", "prev_crawl": ""}'
+	# gcloud pubsub topics publish crawl --project=$(PROJECT) --message='{"url": "https://www.portland.gov/transportation", "crawl": "", "prev_crawl": ""}'
+	curl -i -X POST https://start-crawl-26h4rfwp7a-uw.a.run.app -H "Authorization: bearer $(gcloud auth print-identity-token)"

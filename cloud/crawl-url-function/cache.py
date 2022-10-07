@@ -150,7 +150,11 @@ class CachedResponse(Response):
                 # We don't need the content of non-HTML files or failed responses.
                 if is_good_html_response(response):
                     processor = HtmlProcessor(response.content, result.url)
-                    markdown = processor.get_markdown()
+                    try:
+                        markdown = processor.get_markdown()
+                    except ValueError:
+                        logging.exception("Failed to parse HTML in %r", result.url)
+                        markdown = ""
                     result.content_reference = self.db.collection("content").document(
                         sha256(processor.content).hexdigest()
                     )
