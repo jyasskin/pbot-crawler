@@ -59,7 +59,7 @@ def start_crawl(request):
     """Start today's crawl."""
     try:
         if request.method != "POST":
-            return "Method not allowed\n", 405
+            return "Method not allowed\n", 405, {"Allow", "POST"}
         do_start_crawl()
         return "Done\n", 200
     except Exception:
