@@ -3,11 +3,11 @@ import urllib.parse
 from asyncio import get_running_loop
 from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import Any, AsyncIterator, Callable, Coroutine, Optional
+from typing import Any, AsyncIterator, Callable, Coroutine, Optional, Union
 
 from google.cloud import bigquery
 from google.cloud.bigquery.table import RowIterator
-from quart import Quart, abort, stream_template, url_for
+from quart import Markup, Quart, abort, stream_template, url_for
 from werkzeug.routing import BaseConverter, ValidationError
 
 client = bigquery.Client()
@@ -62,6 +62,20 @@ def web_archive(url: str, latest_date: date) -> str:
     return f"https://web.archive.org/web/{end_of_latest_date:%Y%m%d%H%M%S}/{url}"
 
 
+@app.template_filter()
+def render_diff(diff: Union[str, Markup]) -> Markup:
+    diff = Markup.escape(diff)
+
+    def color(line: Markup) -> Markup:
+        if line.startswith("+"):
+            return Markup(f"<ins>{line}</ins>")
+        if line.startswith("-"):
+            return Markup(f"<del>{line}</del>")
+        return line
+
+    return Markup("<br>\n").join(color(line) for line in diff.splitlines())
+
+
 @app.route("/")
 @app.route("/<isodate:crawl_date>/")
 async def root_page(crawl_date: Optional[date] = None) -> AsyncIterator[str]:
@@ -87,20 +101,36 @@ async def root_page(crawl_date: Optional[date] = None) -> AsyncIterator[str]:
         prev_crawl_date=prev_crawl,
         prev_crawl_link=url_for("root_page", crawl_date=prev_crawl),
         new_pages=new_pages,
-        more_new_pages=url_for("page_change_detail_page", crawl_date=current_crawl, change="new"),
+        more_new_pages=url_for(
+            "page_change_detail_page", crawl_date=current_crawl, change="new"
+        ),
         removed_pages=removed_pages,
-        more_removed_pages=url_for("page_change_detail_page", crawl_date=current_crawl, change="removed"),
+        more_removed_pages=url_for(
+            "page_change_detail_page", crawl_date=current_crawl, change="removed"
+        ),
         modified_pages=modified_pages,
-        more_modified_pages=url_for("page_change_detail_page", crawl_date=current_crawl, change="modified"),
+        more_modified_pages=url_for(
+            "page_change_detail_page", crawl_date=current_crawl, change="modified"
+        ),
     )
 
 
 @app.route("/<isodate:crawl_date>/<any(new,removed,modified):change>")
 async def page_change_detail_page(crawl_date: date, change: str):
-    db_change, title ,old_archive, new_archive= {
+    db_change, title, old_archive, new_archive = {
         "new": ("ADD", f"New pages in the {crawl_date} crawl", None, "Archive"),
-        "removed": ("DEL", f"Removed pages in the {crawl_date} crawl", "Old Archive", None),
-        "modified": ("CHANGE", f"Modified pages in the {crawl_date} crawl", "Old", "New Archive"),
+        "removed": (
+            "DEL",
+            f"Removed pages in the {crawl_date} crawl",
+            "Old Archive",
+            None,
+        ),
+        "modified": (
+            "CHANGE",
+            f"Modified pages in the {crawl_date} crawl",
+            "Old",
+            "New Archive",
+        ),
     }[change]
 
     crawl_dates: CrawlDates = await find_crawl_dates(crawl_date)

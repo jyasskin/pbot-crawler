@@ -1,13 +1,6 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <title>PBOT Crawl Results</title>
-  <style>
-  </style>
-</head>
-<body>
-  <h1>PBOT Crawl Results</h1>
-
+{% extends "layouts/page.html.j2" %}
+{% block title %}PBOT Crawl Results{% endblock %}
+{% block content %}
   <p>Pages in the {{ crawl_date }} crawl, compared to the <a href="{{prev_crawl_link}}">{{ prev_crawl_date }} crawl</a>.
 
   <p>All pages are under <code>https://www.portland.gov/</code>.
@@ -47,7 +40,7 @@
           {% if item.diff %}
             <details><summary>Diff</summary>
 
-            <pre>{{item.diff}}</pre>
+            <div class="diff">{{item.diff|render_diff}}</div>
             </details>
           {% endif %}
       {% endfor %}
@@ -56,5 +49,4 @@
       <p><a href="{{more_modified_pages}}">All {{modified_pages().total_rows}} modified pages</a>
     {% endif %}
   </section>
-</body>
-</html>
+{% endblock %}
