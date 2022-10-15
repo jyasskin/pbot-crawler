@@ -21,7 +21,14 @@
       new_archive %},
       {%endif%}{% if new_archive %}<a
         href="{{item.page | web_archive(crawl_dates.current_crawl)}}">{{new_archive}}</a>{% endif %}]
-      {% endfor %}
+
+      {% if item.diff %}
+        <details><summary>Diff</summary>
+
+        <pre>{{item.diff}}</pre>
+        </details>
+      {% endif %}
+    {% endfor %}
   </ul>
 </body>
 

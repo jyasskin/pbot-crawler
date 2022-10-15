@@ -8,7 +8,7 @@
 <body>
   <h1>PBOT Crawl Results</h1>
 
-  <p>Pages in the {{ crawl_date }} crawl, compared to the {{ prev_crawl_date }} crawl.
+  <p>Pages in the {{ crawl_date }} crawl, compared to the <a href="{{prev_crawl_link}}">{{ prev_crawl_date }} crawl</a>.
 
   <p>All pages are under <code>https://www.portland.gov/</code>.
 
@@ -21,7 +21,7 @@
       {% endfor %}
     </ul>
     {% if new_pages().more_available %}
-      <p><a href="{{more_new_pages}}">More new pages</a>
+      <p><a href="{{more_new_pages}}">All {{new_pages().total_rows}} new pages</a>
     {% endif %}
   </section>
 
@@ -33,7 +33,7 @@
       {% endfor %}
     </ul>
     {% if removed_pages().more_available %}
-      <p><a href="{{more_removed_pages}}">More removed pages</a>
+      <p><a href="{{more_removed_pages}}">All {{removed_pages().total_rows}} removed pages</a>
     {% endif %}
   </section>
 
@@ -43,10 +43,17 @@
       {% for item in modified_pages().pages %}
         <li><a href="{{item.page}}">{{item.page | without_origin}}</a>
           [<a href="{{item.page | web_archive(prev_crawl_date)}}">Old</a>, <a href="{{item.page | web_archive(crawl_date)}}">New Archive</a>]
+
+          {% if item.diff %}
+            <details><summary>Diff</summary>
+
+            <pre>{{item.diff}}</pre>
+            </details>
+          {% endif %}
       {% endfor %}
     </ul>
     {% if modified_pages().more_available %}
-      <p><a href="{{more_modified_pages}}">More modified pages</a>
+      <p><a href="{{more_modified_pages}}">All {{modified_pages().total_rows}} modified pages</a>
     {% endif %}
   </section>
 </body>
