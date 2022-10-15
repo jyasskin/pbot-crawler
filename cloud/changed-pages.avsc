@@ -12,6 +12,11 @@
       "name": "change",
       "type": "string",
       "doc": "One of ADD, DEL, or CHANGE"
+    },
+    {
+      "name": "diff",
+      "type": "string",
+      "doc": "For changed pages, the diff between the old and new pages. For other kinds of changes, an empty string."
     }
   ]
 }

@@ -232,6 +232,7 @@ def publish_page_change(
     else:
         assert response.change == PresenceChange.CHANGED, response.change
         change_description["change"] = "CHANGE"
+    change_description["diff"] = response.diff
     logging.info("Publishing changed page: %s", json.dumps(change_description))
     publisher.publish(changed_pages_topic_path, json.dumps(change_description).encode())
     # And ask the Web Archive to save a copy of the page.

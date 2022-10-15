@@ -41,3 +41,6 @@ test-crawl-url:
 start-crawl:
 	# gcloud pubsub topics publish crawl --project=$(PROJECT) --message='{"url": "https://www.portland.gov/transportation", "crawl": "", "prev_crawl": ""}'
 	curl -i -X POST https://start-crawl-26h4rfwp7a-uw.a.run.app -H "Authorization: bearer $(gcloud auth print-identity-token)"
+
+zip-crawl-url-function:
+	cd crawl-url-function && zip --filesync -r ../crawl-url-function.zip . --exclude @.zipignore

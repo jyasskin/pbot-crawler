@@ -1,4 +1,5 @@
 import copy
+import difflib
 import logging
 from enum import Enum, auto
 from hashlib import sha256
@@ -76,6 +77,8 @@ class CachedResponse(Response):
         """
         self.db = db
         self.url = url
+        self.prev_crawl = prev_crawl
+        self.curr_crawl = curr_crawl
         self.status_code = 0
         self.headers: Dict[str, str] = {}
         self.content_reference: Optional[firestore.DocumentReference] = None
@@ -147,6 +150,7 @@ class CachedResponse(Response):
                 result.headers = self._update_relevant_headers({}, response.headers)
                 result.content_reference = None
                 result.text_content_reference = None
+                markdown = ""
                 # We don't need the content of non-HTML files or failed responses.
                 if is_good_html_response(response):
                     processor = HtmlProcessor(response.content, result.url)
@@ -179,6 +183,23 @@ class CachedResponse(Response):
                     )
 
                 result.change = self._describe_change(result)
+                if (
+                    result.change == PresenceChange.CHANGED
+                    and self.text_content_reference is not None
+                    and markdown != ""
+                ):
+                    result.diff = "".join(
+                        difflib.unified_diff(
+                            self.text_content_reference.get()
+                            .get("text")
+                            .splitlines(keepends=True),
+                            markdown.splitlines(keepends=True),
+                            fromfile=self.url,
+                            fromfiledate=self.prev_crawl,
+                            tofile=self.url,
+                            tofiledate=self.curr_crawl,
+                        )
+                    )
 
         return result
 
@@ -224,6 +245,7 @@ class FreshResponse(Response):
         self.headers = {}
         self.content_reference = None
         self.change = PresenceChange.NEW
+        self.diff = ""
 
     def write_to_firestore(self, db: firestore.Client, current_crawl: str) -> None:
         """Write a response to the current crawl's directory, making sure the

@@ -27,6 +27,7 @@ def firestore_db():
                     "etag": THE_ETAG,
                 },
                 "content": db.collection("objects").document("1"),
+                "text_content": db.collection("text-content").document("2"),
             }
         )
         db.collection("objects").document("1").set(
@@ -48,12 +49,12 @@ def firestore_db():
                     "etag": THE_ETAG,
                 },
                 "content": db.collection("objects").document("3"),
-                "text-content": db.collection("text-content").document("2"),
+                "text_content": db.collection("text-content").document("2"),
             }
         )
         db.collection("text-content").document("2").set(
             {
-                "text": "This is some text",
+                "text": "This is some text\n",
             }
         )
         db.TEST_PAGE1 = TEST_PAGE1
