@@ -5,9 +5,13 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any, AsyncIterator, Callable, Coroutine, Optional, Union
 
+from google.auth.transport import requests
 from google.cloud import bigquery
 from google.cloud.bigquery.table import RowIterator
-from quart import Markup, Quart, abort, stream_template, url_for
+from google.oauth2.id_token import verify_token
+from quart import Markup, Quart, abort, request, stream_template, url_for
+from quart.utils import run_sync
+from werkzeug.datastructures import WWWAuthenticate
 from werkzeug.routing import BaseConverter, ValidationError
 
 client = bigquery.Client()
@@ -147,6 +151,44 @@ async def page_change_detail_page(crawl_date: date, change: str):
         old_archive=old_archive,
         new_archive=new_archive,
     )
+
+
+@app.route("/send_mail", methods=["POST"])
+async def send_mail():
+    auth_header = request.headers.get("Authorization")
+    www_auth = WWWAuthenticate("Bearer")
+    if not auth_header:
+        abort(401, www_authenticate=www_auth)
+
+    # split the auth type and value from the header.
+    auth_type, creds = auth_header.split(" ", 1)
+
+    if auth_type.lower() != "bearer":
+        abort(401, www_authenticate=www_auth)
+
+    def verify(*, verify=True):
+        return verify_token(
+            creds,
+            audience=f"https://{request.host}{url_for('send_mail')}",
+            request=requests.Request(),
+        )
+
+    try:
+        claims = await run_sync(verify)()
+    except ValueError as e:
+        app.logger.warning("Invalid JWT: %s, %r", e, creds)
+        www_auth["error"] = "invalid_token"
+        www_auth["error_description"] = str(e)
+        abort(401, www_authenticate=www_auth)
+
+    if claims["email"] != "email-sender@pbot-site-crawler.iam.gserviceaccount.com":
+        www_auth["error"] = "insufficient_scope"
+        www_auth[
+            "error_description"
+        ] = f"{claims['email']} is not allowed to send emails"
+        abort(401, www_authenticate=www_auth)
+
+    return f"Hello, {claims['email']}!\n"
 
 
 @dataclass(kw_only=True)
