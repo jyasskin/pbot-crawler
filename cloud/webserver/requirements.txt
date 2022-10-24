@@ -1,3 +1,4 @@
 google-cloud-bigquery==3.*
 hypercorn<2.0
 quart<2.0
+sendgrid==6.*

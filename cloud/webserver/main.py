@@ -1,16 +1,22 @@
+import json
 import os
+import re
 import urllib.parse
 from asyncio import get_running_loop
 from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import Any, AsyncIterator, Callable, Coroutine, Optional, Union
+from typing import (Any, AsyncIterator, Callable, Coroutine, Optional, Union,
+                    cast)
 
 from google.auth.transport import requests
 from google.cloud import bigquery
-from google.cloud.bigquery.table import RowIterator
+from google.cloud.bigquery.table import Row, RowIterator
 from google.oauth2.id_token import verify_token
-from quart import Markup, Quart, abort, request, stream_template, url_for
+from python_http_client.client import Response
+from quart import (Markup, Quart, abort, render_template, request,
+                   stream_template, url_for)
 from quart.utils import run_sync
+from sendgrid import SendGridAPIClient
 from werkzeug.datastructures import WWWAuthenticate
 from werkzeug.routing import BaseConverter, ValidationError
 
@@ -60,10 +66,13 @@ def without_origin(url) -> str:
     return parsed.path
 
 
-@app.template_filter()  # type: ignore
-def web_archive(url: str, latest_date: date) -> str:
-    end_of_latest_date = latest_date + timedelta(days=1)
-    return f"https://web.archive.org/web/{end_of_latest_date:%Y%m%d%H%M%S}/{url}"
+@app.template_filter()
+def web_archive(url: str, latest_date: date | None = None) -> str:
+    if latest_date is None:
+        date_param = "*"
+    else:
+        date_param = (latest_date + timedelta(days=1)).strftime("%Y%m%d%H%M%S")
+    return f"https://web.archive.org/web/{date_param}/{url}"
 
 
 @app.template_filter()
@@ -71,10 +80,10 @@ def render_diff(diff: Union[str, Markup]) -> Markup:
     diff = Markup.escape(diff)
 
     def color(line: Markup) -> Markup:
-        if line.startswith("+"):
-            return Markup(f"<ins>{line}</ins>")
-        if line.startswith("-"):
-            return Markup(f"<del>{line}</del>")
+        if line.startswith("+") and not line.startswith("+++"):
+            return Markup(f"<code>+</code><ins>{line[1:]}</ins>")
+        if line.startswith("-") and not line.startswith("---"):
+            return Markup(f"<code>-</code><del>{line[1:]}</del>")
         return line
 
     return Markup("<br>\n").join(color(line) for line in diff.splitlines())
@@ -153,9 +162,111 @@ async def page_change_detail_page(crawl_date: date, change: str):
     )
 
 
-@app.route("/send_mail", methods=["POST"])
+@app.route("/send_mail", methods=["GET", "POST"])
 async def send_mail():
-    auth_header = request.headers.get("Authorization")
+    crawl_dates = await find_crawl_dates()
+    current_crawl = crawl_dates.current_crawl
+    prev_crawl = crawl_dates.prev_crawl
+
+    new_pages = get_pages_with_change(current_crawl=current_crawl, change="ADD")
+
+    removed_pages = get_pages_with_change(current_crawl=current_crawl, change="DEL")
+
+    modified_pages = get_pages_with_change(current_crawl=current_crawl, change="CHANGE")
+
+    def interesting(row: Row) -> bool:
+        return (
+            re.search(
+                "|".join(
+                    [
+                        r"^https://www.portland.gov/transportation/news",
+                        "/documents",
+                        "/meetings",
+                        "/past",
+                        "/services",
+                    ]
+                )
+                + r"(?:\?|$)",
+                row.page,
+            )
+            is None
+        )
+
+    data = {
+        "curr_crawl_date": current_crawl,
+        "curr_crawl_link": f"https://{request.host}{url_for('root_page', crawl_date=current_crawl)}",
+        "prev_crawl_date": prev_crawl,
+        "new": [page for page in (await new_pages()).pages if interesting(page)],
+        "removed": [
+            page for page in (await removed_pages()).pages if interesting(page)
+        ],
+        "modified_link": f"https://{request.host}{url_for('page_change_detail_page', crawl_date=current_crawl, change='modified')}",
+        "modified": [
+            page for page in (await modified_pages()).pages if interesting(page)
+        ],
+    }
+
+    if request.method == "POST":
+        sendgrid_api_key = os.environ.get("SENDGRID_API_KEY", None)
+        app.logger.warning(f"sendgrid_api_key: {sendgrid_api_key}")
+        if sendgrid_api_key is None:
+            await check_authorization(
+                auth_header=request.headers.get("Authorization"),
+                audience=f"https://{request.host}{url_for('send_mail')}",
+                email="email-sender@pbot-site-crawler.iam.gserviceaccount.com",
+            )
+
+        sg = SendGridAPIClient(sendgrid_api_key)
+
+        subject = f"PBOT website changes from {prev_crawl} to {current_crawl}"
+
+        response = cast(
+            Response,
+            sg.client.marketing.singlesends.post(
+                request_body={
+                    "name": subject,
+                    # "send_at": "now",
+                    "send_to": {"list_ids": ["aacbe0f7-c0e1-4698-9b46-d03fce64f779"]},
+                    "email_config": {
+                        "sender_id": 4580544,
+                        "suppression_group_id": -1,  # Uses global unsubscribes.
+                        "subject": subject,
+                        "html_content": await render_template(
+                            "weekly_email.html.j2", **data
+                        ),
+                        "plain_content": await render_template(
+                            "weekly_email.txt.j2", **data
+                        ),
+                        "generate_plain_content": False,
+                    },
+                }
+            ),
+        )
+        response_data = json.loads(response.body)
+
+        schedule_response = cast(
+            Response,
+            sg.client.marketing.singlesends._(response_data["id"]).schedule.put(
+                request_body={"send_at": "now"}
+            ),
+        )
+
+        schedule_response_data = json.loads(response.body)
+
+        return f"Sent {response_data['id']}, with a result of:\n<xmp>{json.dumps(schedule_response_data, indent=2)}</xmp>\n"
+    else:
+        return await render_template("weekly_email.html.j2", **data)
+
+
+async def check_authorization(
+    *, auth_header: str | None, audience: str, email: str
+) -> None:
+    """
+    Params:
+        auth_header: request.headers.get("Authorization").
+        audience: The expected JWT audience.
+        email: The email identity expected to have signed the JWT.
+    """
     www_auth = WWWAuthenticate("Bearer")
     if not auth_header:
         abort(401, www_authenticate=www_auth)
@@ -169,7 +280,7 @@ async def send_mail():
     def verify(*, verify=True):
         return verify_token(
             creds,
-            audience=f"https://{request.host}{url_for('send_mail')}",
+            audience=audience,
             request=requests.Request(),
         )
 
@@ -181,14 +292,12 @@ async def send_mail():
         www_auth["error_description"] = str(e)
         abort(401, www_authenticate=www_auth)
 
-    if claims["email"] != "email-sender@pbot-site-crawler.iam.gserviceaccount.com":
+    if claims["email"] != email:
         www_auth["error"] = "insufficient_scope"
         www_auth[
             "error_description"
         ] = f"{claims['email']} is not allowed to send emails"
         abort(401, www_authenticate=www_auth)
-
-    return f"Hello, {claims['email']}!\n"
 
 
 @dataclass(kw_only=True)

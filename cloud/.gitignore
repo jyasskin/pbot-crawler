@@ -4,3 +4,5 @@ crawl-url-function.zip
 .terraform/
 terraform.tfstate
 terraform.tfstate.backup
+
+sendgrid.env

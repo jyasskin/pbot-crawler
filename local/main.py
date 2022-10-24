@@ -140,6 +140,8 @@ def clean_url(url: whatwg_url.Url) -> whatwg_url.Url:
     query = urllib.parse.parse_qs(url.query)
     query.pop('utm_medium', None)
     query.pop('utm_source', None)
+    query.pop("_ga", None)
+    query.pop("_gl", None)
     url.query = urllib.parse.urlencode(query, doseq=True) or None
     return url
 
