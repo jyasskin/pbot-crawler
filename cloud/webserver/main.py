@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import re
 import urllib.parse
@@ -12,13 +13,17 @@ from google.auth.transport import requests
 from google.cloud import bigquery
 from google.cloud.bigquery.table import Row, RowIterator
 from google.oauth2.id_token import verify_token
-from python_http_client.client import Response
+from python_http_client.exceptions import HTTPError
 from quart import (Markup, Quart, abort, render_template, request,
                    stream_template, url_for)
 from quart.utils import run_sync
-from sendgrid import SendGridAPIClient
 from werkzeug.datastructures import WWWAuthenticate
 from werkzeug.routing import BaseConverter, ValidationError
+
+from sendgrid_util import SendGrid
+
+logging.basicConfig()
+logging.getLogger("sendgrid_util").setLevel(logging.DEBUG)
 
 client = bigquery.Client()
 
@@ -208,7 +213,6 @@ async def send_mail():
 
     if request.method == "POST":
         sendgrid_api_key = os.environ.get("SENDGRID_API_KEY", None)
-        app.logger.warning(f"sendgrid_api_key: {sendgrid_api_key}")
         if sendgrid_api_key is None:
             await check_authorization(
                 auth_header=request.headers.get("Authorization"),
@@ -216,44 +220,31 @@ async def send_mail():
                 email="email-sender@pbot-site-crawler.iam.gserviceaccount.com",
             )
 
-        sg = SendGridAPIClient(sendgrid_api_key)
+        assert sendgrid_api_key is not None
+        sg = SendGrid(sendgrid_api_key)
 
         subject = f"PBOT website changes from {prev_crawl} to {current_crawl}"
 
-        response = cast(
-            Response,
-            sg.client.marketing.singlesends.post(
-                request_body={
-                    "name": subject,
-                    # "send_at": "now",
-                    "send_to": {"list_ids": ["aacbe0f7-c0e1-4698-9b46-d03fce64f779"]},
-                    "email_config": {
-                        "sender_id": 4580544,
-                        "suppression_group_id": -1,  # Uses global unsubscribes.
-                        "subject": subject,
-                        "html_content": await render_template(
-                            "weekly_email.html.j2", **data
-                        ),
-                        "plain_content": await render_template(
-                            "weekly_email.txt.j2", **data
-                        ),
-                        "generate_plain_content": False,
-                    },
-                }
-            ),
-        )
-        response_data = json.loads(response.body)
+        try:
+            unsubscribed = sg.remove_unsubscribed()
+            to = sg.get_pbot_subscribers(frozenset(unsubscribed))
+            if len(to) == 0:
+                logging.error("Nobody to send email to.")
+                return "Nobody to send email to.\n", 400
 
-        schedule_response = cast(
-            Response,
-            sg.client.marketing.singlesends._(response_data["id"]).schedule.put(
-                request_body={"send_at": "now"}
-            ),
-        )
+            response = sg.send_mail(
+                to=to,
+                sender_email="pbot-crawl-reports@yasskin.info",
+                sender_name="Jeffrey Yasskin",
+                subject=subject,
+                html_content=await render_template("weekly_email.html.j2", **data),
+                plain_content=await render_template("weekly_email.txt.j2", **data),
+            )
+        except HTTPError as e:
+            app.logger.exception(e.to_dict())
+            raise
 
-        schedule_response_data = json.loads(response.body)
-
-        return f"Sent {response_data['id']}, with a result of:\n<xmp>{json.dumps(schedule_response_data, indent=2)}</xmp>\n"
+        return f"Sent to {len(to)} people, with a result of:\n<xmp>{json.dumps(response, indent=2)}</xmp>\n"
     else:
         return await render_template("weekly_email.html.j2", **data)
 

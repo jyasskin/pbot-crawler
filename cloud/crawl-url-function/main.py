@@ -11,12 +11,14 @@ from urllib.robotparser import RobotFileParser
 import functions_framework
 import google.auth.exceptions
 import requests
+import whatwg_url
 from google.cloud import error_reporting, firestore
 from google.cloud import logging as cloud_logging
 from google.cloud import pubsub_v1
 
 import config
 from cache import Cache, CacheState, FreshResponse, PresenceChange
+from htmlutil import clean_url
 
 SESSION = requests.Session()
 USER_AGENT = "PBOT Crawler"
@@ -108,7 +110,7 @@ def do_crawl_url(cloud_event):
         ) from e
     logging.info("Invoked with %r", data)
     current_crawl, prev_crawl = get_crawl(data)
-    url = data["url"]
+    url = clean_url(whatwg_url.parse_url(data["url"])).href
     assert ok_to_crawl(url), url
     if url in crawled_urls:
         return
