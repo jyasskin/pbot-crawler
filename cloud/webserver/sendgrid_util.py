@@ -6,7 +6,8 @@ from typing import cast
 from python_http_client.client import Response
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import (Content, From, Mail, Personalization,
-                                   Subject, SubscriptionSubstitutionTag,
+                                   ReplyTo, Subject,
+                                   SubscriptionSubstitutionTag,
                                    SubscriptionTracking, To, TrackingSettings)
 
 logger = logging.getLogger(__name__)
@@ -51,12 +52,13 @@ class SendGrid:
             self.client.asm.suppressions._("global")._(email).delete()
         return suppressed_emails
 
-    def get_pbot_subscribers(self, exclude: Set[str] = frozenset()) -> list:
+    def get_pbot_subscribers(self, list_id, exclude: Set[str] = frozenset()) -> list:
+        assert "'" not in list_id
         response = cast(
             Response,
             self.client.marketing.contacts.search.post(
                 request_body={
-                    "query": "CONTAINS(list_ids, 'aacbe0f7-c0e1-4698-9b46-d03fce64f779')"
+                    "query": f"CONTAINS(list_ids, '{list_id}')"
                 }
             ),
         )
@@ -83,6 +85,7 @@ class SendGrid:
             message.add_personalization(p)
         message.subject = Subject(subject)
         message.from_email = From(email=sender_email, name=sender_name)
+        message.reply_to = ReplyTo(email="jyasskin@gmail.com", name=sender_name)
         message.content = [
             Content(mime_type="text/html", content=html_content),
             Content(mime_type="text/plain", content=plain_content),

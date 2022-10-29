@@ -22,8 +22,12 @@ from werkzeug.routing import BaseConverter, ValidationError
 
 from sendgrid_util import SendGrid
 
-logging.basicConfig()
-logging.getLogger("sendgrid_util").setLevel(logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
+
+# Default to a test list.
+SENDGRID_PBOT_LIST_ID = os.environ.get(
+    "SENDGRID_PBOT_LIST_ID", "d3d77092-4188-4d3d-82ce-6aa8a09daf93"
+)
 
 client = bigquery.Client()
 
@@ -219,7 +223,7 @@ async def send_mail():
                 audience=f"https://{request.host}{url_for('send_mail')}",
                 email="email-sender@pbot-site-crawler.iam.gserviceaccount.com",
             )
-            with open('/etc/secrets/sendgrid/api_key') as f:
+            with open("/etc/secrets/sendgrid/api_key") as f:
                 sendgrid_api_key = f.read().strip()
 
         assert sendgrid_api_key is not None
@@ -229,7 +233,9 @@ async def send_mail():
 
         try:
             unsubscribed = sg.remove_unsubscribed()
-            to = sg.get_pbot_subscribers(frozenset(unsubscribed))
+            to = sg.get_pbot_subscribers(
+                list_id=SENDGRID_PBOT_LIST_ID, exclude=frozenset(unsubscribed)
+            )
             if len(to) == 0:
                 logging.error("Nobody to send email to.")
                 return "Nobody to send email to.\n", 400

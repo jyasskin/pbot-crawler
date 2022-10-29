@@ -9,7 +9,8 @@ apply-terraform: zip-crawl-url-function
 deploy-webserver:
 	gcloud run deploy webserver --project=$(PROJECT) --region=us-west1 --source webserver/ \
 		--memory 512Mi --cpu 1 --service-account=webserver@$(PROJECT).iam.gserviceaccount.com \
-		--update-secrets=/etc/secrets/sendgrid/api_key=sendgrid-send-email-api-key:latest
+		--update-secrets=/etc/secrets/sendgrid/api_key=sendgrid-send-email-api-key:latest \
+		--env-vars-file=webserver/production.env.yaml
 
 start-emulator:
 	gcloud beta emulators pubsub start --project=$(PROJECT)
