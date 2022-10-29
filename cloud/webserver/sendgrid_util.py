@@ -5,8 +5,9 @@ from typing import cast
 
 from python_http_client.client import Response
 from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import (Asm, Content, From, GroupId, Mail,
-                                   Personalization, Subject, To)
+from sendgrid.helpers.mail import (Content, From, Mail, Personalization,
+                                   Subject, SubscriptionSubstitutionTag,
+                                   SubscriptionTracking, To, TrackingSettings)
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,9 @@ class SendGrid:
         suppressed_contacts = suppressed_contacts["result"]
         self.client.marketing.contacts.delete(
             query_params={
-                "ids": ",".join(contact["contact"]["id"] for contact in suppressed_contacts.values())
+                "ids": ",".join(
+                    contact["contact"]["id"] for contact in suppressed_contacts.values()
+                )
             }
         )
         logger.info("Removed %s unsubscribed contacts", len(suppressed_contacts))
@@ -84,7 +87,9 @@ class SendGrid:
             Content(mime_type="text/html", content=html_content),
             Content(mime_type="text/plain", content=plain_content),
         ]
-        #message.asm = Asm(
-        #    group_id=GroupId(-1),
-        #)
+        message.tracking_settings = TrackingSettings(
+            subscription_tracking=SubscriptionTracking(
+                True, substitution_tag=SubscriptionSubstitutionTag("[unsubscribe_url]")
+            )
+        )
         self.sg.send(message)

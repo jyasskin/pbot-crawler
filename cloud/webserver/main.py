@@ -219,6 +219,8 @@ async def send_mail():
                 audience=f"https://{request.host}{url_for('send_mail')}",
                 email="email-sender@pbot-site-crawler.iam.gserviceaccount.com",
             )
+            with open('/etc/secrets/sendgrid/api_key') as f:
+                sendgrid_api_key = f.read().strip()
 
         assert sendgrid_api_key is not None
         sg = SendGrid(sendgrid_api_key)
@@ -241,7 +243,9 @@ async def send_mail():
                 plain_content=await render_template("weekly_email.txt.j2", **data),
             )
         except HTTPError as e:
-            app.logger.exception(e.to_dict())
+            messages = [error["message"] for error in e.to_dict["errors"]]
+            for message in messages:
+                app.logger.error(message)
             raise
 
         return f"Sent to {len(to)} people, with a result of:\n<xmp>{json.dumps(response, indent=2)}</xmp>\n"
