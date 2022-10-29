@@ -6,8 +6,7 @@ import urllib.parse
 from asyncio import get_running_loop
 from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import (Any, AsyncIterator, Callable, Coroutine, Optional, Union,
-                    cast)
+from typing import Any, AsyncIterator, Callable, Coroutine, Optional, Union
 
 from google.auth.transport import requests
 from google.cloud import bigquery
