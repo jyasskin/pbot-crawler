@@ -21,7 +21,7 @@ from cache import Cache, CacheState, FreshResponse, PresenceChange
 from htmlutil import clean_url
 
 SESSION = requests.Session()
-USER_AGENT = "PBOT Crawler"
+USER_AGENT = "PBOT Crawler from github.com/jyasskin/pbot-crawler"
 SESSION.headers.update({"user-agent": USER_AGENT})
 next_fetch = datetime.now(timezone.utc)
 
