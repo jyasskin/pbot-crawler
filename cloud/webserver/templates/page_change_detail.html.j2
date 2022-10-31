@@ -7,14 +7,8 @@
 
   <ul>
     {% for item in pages().pages %}
-    <li><a href="{{item.page}}">{{item.page | without_origin}}</a> [{% if old_archive %}<a
-        href="{{item.page | web_archive(crawl_dates.prev_crawl)}}">{{old_archive}}</a>{% endif %}{%if old_archive and
-      new_archive %},
-      {%endif%}{% if new_archive %}<a
-        href="{{item.page | web_archive(crawl_dates.current_crawl)}}">{{new_archive}}</a>{% endif %}]
-
-      {% if item.diff %}
-        <details><summary>Diff</summary>
+    <li>{% if item.diff %}<details><summary>{%endif%}<a href="{{item.page}}">{{item.page | without_origin}}</a>
+      [<a href="{{item.page | web_archive(archive_date)}}">Archive</a>]{% if item.diff %}</summary>
 
         <div class="diff">{{item.diff|render_diff}}</div>
         </details>

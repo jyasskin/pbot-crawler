@@ -1,14 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <title>{% block title %}{% endblock %}</title>
+  <title>{{ self.title() | striptags }}</title>
   <style>
   .diff ins { background-color: #dfd; text-decoration: none; }
   .diff del { background-color: #fdd; text-decoration: none; }
   </style>
 </head>
 <body>
-  <h1>{{ self.title() }}</h1>
+  <h1>{% block title %}{% endblock %}</h1>
 
   {% block content %}
   {% endblock %}

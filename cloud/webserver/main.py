@@ -138,19 +138,18 @@ async def root_page(crawl_date: Optional[date] = None) -> AsyncIterator[str]:
 
 @app.route("/<isodate:crawl_date>/<any(new,removed,modified):change>")
 async def page_change_detail_page(crawl_date: date, change: str):
-    db_change, title, old_archive, new_archive = {
-        "new": ("ADD", f"New pages in the {crawl_date} crawl", None, "Archive"),
+    crawl_link = f"<a href='{url_for('root_page', crawl_date=crawl_date)}'>{crawl_date} crawl</a>"
+    db_change, title, archive_date = {
+        "new": ("ADD", f"New pages in the {crawl_link}", crawl_date),
         "removed": (
             "DEL",
-            f"Removed pages in the {crawl_date} crawl",
-            "Old Archive",
+            f"Removed pages in the {crawl_link}",
             None,
         ),
         "modified": (
             "CHANGE",
-            f"Modified pages in the {crawl_date} crawl",
-            "Old",
-            "New Archive",
+            f"Modified pages in the {crawl_link}",
+            None,
         ),
     }[change]
 
@@ -162,11 +161,10 @@ async def page_change_detail_page(crawl_date: date, change: str):
 
     return await stream_template(
         "page_change_detail.html.j2",
-        title=title,
+        title=Markup(title),
         crawl_dates=crawl_dates,
         pages=changed_pages,
-        old_archive=old_archive,
-        new_archive=new_archive,
+        archive_date=archive_date,
     )
 
 
