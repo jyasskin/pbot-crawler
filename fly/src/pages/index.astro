@@ -1,0 +1,55 @@
+---
+import Layout from '@layouts/Layout.astro';
+
+
+---
+
+<Layout title="PBOT Crawl Results">
+	<p>Pages in the {{ crawl_date }} crawl, compared to the <a href="{{prev_crawl_link}}">{{ prev_crawl_date }} crawl</a>.
+
+		<p>You can <a href="https://cdn.forms-content.sg-form.com/df6b15b2-4dd9-11ed-bc19-eef8bac46398">subscribe to a periodic email of these crawl results</a>.
+
+		<p>All pages are under <code>https://www.portland.gov/</code>.
+
+		<section>
+		  <h2>New pages</h2>
+
+		  <ul>
+			{% for item in new_pages().pages %}
+			  <li><a href="{{item.page}}">{{item.page | without_origin}}</a> [<a href="{{item.page | web_archive(crawl_date)}}">Archive</a>]
+			{% endfor %}
+		  </ul>
+		  {% if new_pages().more_available %}
+			<p><a href="{{more_new_pages}}">All {{new_pages().total_rows}} new pages</a>
+		  {% endif %}
+		</section>
+
+		<section>
+		  <h2>Removed pages</h2>
+		  <ul>
+			{% for item in removed_pages().pages %}
+			  <li><a href="{{item.page}}">{{item.page | without_origin}}</a> [<a href="{{item.page | web_archive(prev_crawl_date)}}">Archive</a>]
+			{% endfor %}
+		  </ul>
+		  {% if removed_pages().more_available %}
+			<p><a href="{{more_removed_pages}}">All {{removed_pages().total_rows}} removed pages</a>
+		  {% endif %}
+		</section>
+
+		<section>
+		  <h2>Modified pages</h2>
+		  <ul>
+			{% for item in modified_pages().pages %}
+			  <li>{% if item.diff %}<details><summary>{%endif%}<a href="{{item.page}}">{{item.page | without_origin}}</a>
+				[<a href="{{item.page | web_archive}}">Archive</a>]
+				{% if item.diff %}</summary>
+				  <div class="diff">{{item.diff|render_diff}}</div>
+				  </details>
+				{% endif %}
+			{% endfor %}
+		  </ul>
+		  {% if modified_pages().more_available %}
+			<p><a href="{{more_modified_pages}}">All {{modified_pages().total_rows}} modified pages</a>
+		  {% endif %}
+		</section>
+</Layout>
