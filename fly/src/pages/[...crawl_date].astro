@@ -5,6 +5,8 @@ import PrettyDiff from "@components/PrettyDiff.astro";
 import Layout from "@layouts/Layout.astro";
 import { find_crawl_dates,get_pages_with_change } from "@lib/bigquery";
 import { parse_crawl_date } from "@lib/util";
+import debugModule from "debug";
+const debug = debugModule("pbotcrawl");
 
 function without_origin(url: string): string {
     const parsed = new URL(url);
@@ -15,6 +17,7 @@ const { crawl_date } = Astro.params;
 
 let parsed_crawl_date = parse_crawl_date(crawl_date);
 if (crawl_date !== undefined && parsed_crawl_date === undefined) {
+    debug({ crawl_date });
     // The crawl_date wasn't a date.
     return new Response(undefined, { status: 404 });
 }
