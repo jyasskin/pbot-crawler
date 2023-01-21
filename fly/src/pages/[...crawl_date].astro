@@ -1,0 +1,146 @@
+---
+import ArchiveLink from "@components/ArchiveLink.astro";
+import MaybeDetails from "@components/MaybeDetails.astro";
+import PrettyDiff from "@components/PrettyDiff.astro";
+import Layout from "@layouts/Layout.astro";
+import { find_crawl_dates,get_pages_with_change } from "@lib/bigquery";
+import { parse_crawl_date } from "@lib/util";
+
+function without_origin(url: string): string {
+    const parsed = new URL(url);
+    return `${parsed.pathname}${parsed.search}`;
+}
+
+const { crawl_date } = Astro.params;
+
+let parsed_crawl_date = parse_crawl_date(crawl_date);
+if (crawl_date !== undefined && parsed_crawl_date === undefined) {
+    // The crawl_date wasn't a date.
+    return new Response(undefined, { status: 404 });
+}
+
+const crawl_dates = await find_crawl_dates(parsed_crawl_date);
+if (crawl_dates === undefined) {
+    return new Response(undefined, { status: 404 });
+}
+
+const current_crawl = crawl_dates.current_crawl;
+const prev_crawl = crawl_dates.prev_crawl;
+
+const [new_pages, removed_pages, modified_pages] = await Promise.all([
+    get_pages_with_change({
+        current_crawl,
+        change: "ADD",
+        max_results: 10,
+    }),
+    get_pages_with_change({
+        current_crawl,
+        change: "DEL",
+        max_results: 10,
+    }),
+    get_pages_with_change({
+        current_crawl,
+        change: "CHANGE",
+        max_results: 10,
+    }),
+]);
+---
+
+<Layout title="PBOT Crawl Results">
+    <p>
+        Pages in the {current_crawl.toString()} crawl, compared to the <a
+            href={`/${prev_crawl}`}>{prev_crawl.toString()} crawl</a
+        >.
+    </p>
+
+    <p>
+        You can <a href="/subscribe"
+            >subscribe to a periodic email of these crawl results</a
+        >.
+    </p>
+
+    <p>All pages are under <code>https://www.portland.gov/</code>.</p>
+
+    <section>
+        <h2>New pages</h2>
+        <ul>
+            {
+                new_pages.pages.map((item) => (
+                    <li>
+                        <a href={item.page}>{without_origin(item.page)}</a> [
+                        <ArchiveLink
+                            url={item.page}
+                            latest_date={current_crawl}
+                        >
+                            Archive
+                        </ArchiveLink>
+                        ]
+                    </li>
+                ))
+            }
+        </ul>
+        {
+            new_pages.more_available ? (
+                <p>
+                    <a href={`/${current_crawl}/new`}>
+                        All {new_pages.total_rows} new pages
+                    </a>
+                </p>
+            ) : null
+        }
+    </section>
+
+    <section>
+        <h2>Removed pages</h2>
+        <ul>
+            {
+                removed_pages.pages.map((item) => (
+                    <li>
+                        <a href={item.page}>{without_origin(item.page)}</a> [
+                        <ArchiveLink url={item.page} latest_date={prev_crawl}>
+                            Archive
+                        </ArchiveLink>
+                        ]
+                    </li>
+                ))
+            }
+        </ul>
+        {
+            removed_pages.more_available ? (
+                <p>
+                    <a href={`/${current_crawl}/removed`}>
+                        All {removed_pages.total_rows} removed pages
+                    </a>
+                </p>
+            ) : null
+        }
+    </section>
+
+    <section>
+        <h2>Modified pages</h2>
+        <ul>
+            {
+                modified_pages.pages.map((item) => (
+                    <li>
+                        <MaybeDetails when={item.diff}>
+                            <a href="{{item.page}}">
+                                {without_origin(item.page)}
+                            </a>
+                            [<ArchiveLink url={item.page}>Archive</ArchiveLink>]
+                            <PrettyDiff slot="details" diff={item.diff} />
+                        </MaybeDetails>
+                    </li>
+                ))
+            }
+        </ul>
+        {
+            modified_pages.more_available ? (
+                <p>
+                    <a href={`/${current_crawl}/modified`}>
+                        All {modified_pages.total_rows} modified pages
+                    </a>
+                </p>
+            ) : null
+        }
+    </section>
+</Layout>

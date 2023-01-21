@@ -1,0 +1,63 @@
+---
+interface Props {
+    diff: string;
+}
+
+const { diff } = Astro.props;
+
+function color(line: string): { type: "ins" | "del" | "none"; line: string } {
+    if (line.startsWith("+") && !line.startsWith("+++")) {
+        return { type: "ins", line: line.slice(1) };
+    }
+    if (line.startsWith("-") && !line.startsWith("---")) {
+        return { type: "del", line: line.slice(1) };
+    }
+    return { type: "none", line };
+}
+---
+
+<style is:global>
+    .diff ins {
+        background-color: #dfd;
+        text-decoration: none;
+    }
+    .diff del {
+        background-color: #fdd;
+        text-decoration: none;
+    }
+</style>
+
+<div class="diff">
+    {
+        diff
+            .split("\n")
+            .map(color)
+            .map(({ type, line }) => {
+                switch (type) {
+                    case "ins":
+                        return (
+                            <>
+                                <code>+</code>
+                                <ins>{line}</ins>
+                                <br />
+                            </>
+                        );
+                    case "del":
+                        return (
+                            <>
+                                <code>-</code>
+                                <del>{line}</del>
+                                <br />
+                            </>
+                        );
+                    case "none":
+                        return (
+                            <>
+                                {line}
+                                <br />
+                            </>
+                        );
+                }
+            })
+    }
+</div>

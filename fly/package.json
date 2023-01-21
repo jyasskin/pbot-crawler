@@ -17,10 +17,15 @@
   "packageManager": "pnpm@7.25.0",
   "dependencies": {
     "@astrojs/node": "^4.0.0",
+    "@google-cloud/bigquery": "^6.0.3",
     "@prisma/client": "^4.9.0",
-    "astro": "^1.9.2"
+    "@sendgrid/client": "^7.7.0",
+    "astro": "^1.9.2",
+    "debug": "^4.3.4",
+    "temporal-polyfill": "^0.0.8"
   },
   "devDependencies": {
+    "@types/debug": "^4.1.7",
     "@types/node": "^18.11.18",
     "prisma": "^4.9.0",
     "ts-node": "^10.9.1",
