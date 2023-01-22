@@ -26,7 +26,7 @@ if (Astro.request.method == "POST") {
         const unsubscribeSecret = randomBytes(16).toString("base64url");
 
         try {
-            prisma.subscription.create({
+            await prisma.subscription.create({
                 data: {
                     email,
                     name: name || null,
