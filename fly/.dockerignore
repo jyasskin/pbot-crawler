@@ -2,6 +2,7 @@
 .env*
 .gitignore
 .terraform*
+**/sqlite.db*
 Dockerfile
 fly.toml
 main.tf
