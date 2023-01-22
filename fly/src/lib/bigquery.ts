@@ -3,9 +3,13 @@ import debugModule from 'debug';
 import { Temporal } from 'temporal-polyfill';
 
 const debug = debugModule('pbotcrawl:bigquery');
-const bigqueryClient = new BigQuery();
+const bigqueryClient = new BigQuery({
+    // GOOGLE_SERVICE_ACCOUNT was generated using the process at
+    // https://cloud.google.com/iam/docs/creating-managing-service-account-keys#creating and saved
+    // as a Fly secret.
+    credentials: process.env.GOOGLE_SERVICE_ACCOUNT ? JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT) : undefined
+});
 const location = 'us-west1';
-const UTC = new Temporal.TimeZone('UTC');
 
 function toBQDate(date: Temporal.PlainDate) {
     return BigQuery.date(date);

@@ -27,12 +27,12 @@ dependencies:
   debug: 4.3.4
   express: 4.18.2
   handlebars: 4.7.7
+  prisma: 4.9.0
   temporal-polyfill: 0.0.8
 
 devDependencies:
   '@types/debug': 4.1.7
   '@types/node': 18.11.18
-  prisma: 4.9.0
   ts-node: 10.9.1_awa2wsr5thmg3i7jqycphctjfq
   typescript: 4.9.4
 
@@ -586,6 +586,7 @@ packages:
   /@prisma/engines/4.9.0:
     resolution: {integrity: sha512-t1pt0Gsp+HcgPJrHFc+d/ZSAaKKWar2G/iakrE07yeKPNavDP3iVKPpfXP22OTCHZUWf7OelwKJxQgKAm5hkgw==}
     requiresBuild: true
+    dev: false
 
   /@proload/core/0.3.3:
     resolution: {integrity: sha512-7dAFWsIK84C90AMl24+N/ProHKm4iw0akcnoKjRvbfHifJZBLhaDsDus1QJmhG12lXj4e/uB/8mB/0aduCW+NQ==}
@@ -3271,6 +3272,7 @@ packages:
     requiresBuild: true
     dependencies:
       '@prisma/engines': 4.9.0
+    dev: false
 
   /prismjs/1.29.0:
     resolution: {integrity: sha512-Kx/1w86q/epKcmte75LNrEoT+lX8pBpavuAbvJWRXar7Hz8jrtF+e3vY751p0R8H9HdArwaCTNDDzHg/ScJK1Q==}

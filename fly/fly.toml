@@ -1,0 +1,10 @@
+# fly.toml file generated for pbot-crawler on 2023-01-21T20:59:52-08:00
+
+# Create the machine with:
+#   flyctl machines run . --cpus 1 --size shared-cpu-1x --memory 256 --region sea --port 443:3000/tcp:tls:http --volume db:/data --env MAX_IDLE_SECONDS=60 --env PORT=3000 --env DATABASE_URL=file:///data/sqlite.db
+
+# Update the image with:
+#   flyctl deploy --remote-only --build-only --push .
+#   flyctl image update --image registry.fly.io/pbot-crawler:deployment-whatever-the-previous-step-printed
+
+app = "pbot-crawler"

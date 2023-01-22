@@ -1,0 +1,9 @@
+.dockerignore
+.env*
+.gitignore
+.terraform*
+Dockerfile
+fly.toml
+main.tf
+node_modules/
+terraform*
