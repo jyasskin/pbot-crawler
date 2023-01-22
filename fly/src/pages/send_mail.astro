@@ -1,0 +1,126 @@
+---
+import Layout from "@layouts/Layout.astro";
+import { find_crawl_dates,get_pages_with_change } from "@lib/bigquery";
+import { html_template,plain_template } from "@lib/handlebars";
+import { prisma } from "@lib/prisma";
+import sendgrid from "@sendgrid/mail";
+
+const crawl_dates = await find_crawl_dates();
+if (!crawl_dates) {
+    return new Response(undefined, { status: 404 });
+}
+const current_crawl = crawl_dates.current_crawl;
+const prev_crawl = crawl_dates.prev_crawl;
+
+const [new_pages, removed_pages, modified_pages] = await Promise.all([
+    get_pages_with_change({ current_crawl: current_crawl, change: "ADD" }),
+    get_pages_with_change({ current_crawl: current_crawl, change: "DEL" }),
+    get_pages_with_change({ current_crawl: current_crawl, change: "CHANGE" }),
+]);
+
+const boringRE = new RegExp(
+    "(?:" +
+        [
+            "^https://www.portland.gov/transportation/news",
+            "/documents",
+            "/meetings",
+            "/past",
+            "/services",
+        ].join("|") +
+        String.raw`)(?:\?|$)`,
+    "i"
+);
+
+function interesting(row: { page: string }): boolean {
+    return !boringRE.test(row.page);
+}
+
+const modified = modified_pages.pages.filter(interesting);
+
+const data = {
+    subscribe_url: `https://${Astro.url.host}/subscribe`,
+    curr_crawl_date: String(current_crawl),
+    curr_crawl_link: `https://${Astro.url.host}/${current_crawl}`,
+    prev_crawl_date: String(prev_crawl),
+    new: new_pages.pages.filter(interesting),
+    removed: removed_pages.pages.filter(interesting),
+    modified_link:
+        modified.length > 100
+            ? `https://${Astro.url.host}/${current_crawl}/modified`
+            : undefined,
+    modified: modified.slice(0, 100),
+};
+
+let status: string[] = [];
+const html_content = html_template(data);
+const plain_content = plain_template(data);
+const subject = `PBOT website changes from ${prev_crawl} to ${current_crawl}`;
+
+if (Astro.request.method == "POST") {
+    const sendgrid_api_key = process.env.SENDGRID_API_KEY;
+    if (!sendgrid_api_key) {
+        status.push("No Sendgrid API key.");
+    } else {
+        sendgrid.setApiKey(sendgrid_api_key);
+
+        try {
+            const subscriptions = await prisma.subscription.findMany({});
+            if (subscriptions.length === 0) {
+                status.push("No subscriptions.");
+            }
+            const [response] = await sendgrid.send({
+                personalizations: subscriptions.map((subscription) => {
+                    const unsubscribe_url = `https://${Astro.url.host}/unsubscribe?secret=${subscription.unsubscribeSecret}`;
+                    return {
+                        to: [
+                            {
+                                email: subscription.email,
+                                name: subscription.name ?? undefined,
+                            },
+                        ],
+                        substitutions: {
+                            "[[[unsubscribe-url]]]": unsubscribe_url,
+                        },
+                        headers: {
+                            "List-Unsubscribe": `<${unsubscribe_url}>`,
+                        },
+                    };
+                }),
+                from: {
+                    email: "pbot-crawl-reports@yasskin.info",
+                    name: "Jeffrey Yasskin",
+                },
+                subject,
+                content: [
+                    { type: "text/plain", value: plain_content },
+                    { type: "text/html", value: html_content },
+                ],
+            });
+
+            if (response.statusCode !== 202) {
+                status.push(JSON.stringify(response.body));
+            }
+        } catch (e) {
+            status.push(String(e));
+        }
+    }
+}
+---
+
+<Layout title="Sending crawl to subscribers">
+    {
+        Astro.request.method == "POST" ? null : (
+            <form method="post">
+                <button>Send</button>
+            </form>
+        )
+    }
+
+    {status.map((elem) => <p>{elem}</p>)}
+
+    <h2>HTML email content</h2>
+    <div set:html={html_content} />
+
+    <h1>Plain Text email content</h1>
+    <pre set:text={plain_content} />
+</Layout>

@@ -1,0 +1,69 @@
+---
+import Layout from "@layouts/Layout.astro";
+import { prisma } from "@lib/prisma";
+import { getFormDataString } from "@lib/util";
+import { Prisma } from "@prisma/client";
+import { randomBytes } from "node:crypto";
+
+let email: string | undefined = undefined;
+let name: string | undefined = undefined;
+let subscribeResult: "exists" | "added" | "none" = "none";
+
+function renderEmail(email: string, name: string | undefined): string {
+    if (name) {
+        return `${name} <${email}>`;
+    } else {
+        return email;
+    }
+}
+
+if (Astro.request.method == "POST") {
+    const formData = await Astro.request.formData();
+    email = getFormDataString(formData, "email");
+    if (email) {
+        name = getFormDataString(formData, "name");
+
+        const unsubscribeSecret = randomBytes(16).toString("base64url");
+
+        try {
+            prisma.subscription.create({
+                data: {
+                    email,
+                    name: name || null,
+                    unsubscribeSecret,
+                },
+            });
+            subscribeResult = "added";
+        } catch (e) {
+            if (
+                e instanceof Prisma.PrismaClientKnownRequestError &&
+                e.code === "P2002"
+            ) {
+                subscribeResult = "exists";
+            } else {
+                throw e;
+            }
+        }
+    }
+}
+---
+
+<Layout title="Subscribe to crawl results">
+    {
+        subscribeResult === "exists" ? (
+            <p>{renderEmail(email!, name)} is already subscribed.</p>
+        ) : subscribeResult === "added" ? (
+            <p>{renderEmail(email!, name)} subscribed to weekly emails.</p>
+        ) : (
+            <form method="post">
+                <label>
+                    Email: <input name="email" required type="text" />
+                </label>
+                <label title="This is only used in the To line of the email.">
+                    Name (optional): <input name="name" type="text" />
+                </label>
+                <button type="submit">Subscribe</button>
+            </form>
+        )
+    }
+</Layout>

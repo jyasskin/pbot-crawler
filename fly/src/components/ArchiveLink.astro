@@ -1,24 +1,12 @@
 ---
+import { web_archive } from "@lib/util";
 import type { Temporal } from "temporal-polyfill";
-
 interface Props {
     url: string;
     latest_date?: Temporal.PlainDate;
 }
 
 const { url, latest_date } = Astro.props;
-
-function pad(n: number, digits: number): string {
-    return String(n).padStart(digits, "0");
-}
-
-let date_param: string;
-if (latest_date === undefined) {
-    date_param = "*";
-} else {
-    const d = latest_date.add({ days: 1 });
-    date_param = `${pad(d.year, 4)}${pad(d.month, 2)}${pad(d.day, 2)}000000`;
-}
 ---
 
-<a href={`https://web.archive.org/web/${date_param}/${url}`}><slot /></a>
+<a href={web_archive(url, latest_date)}><slot /></a>

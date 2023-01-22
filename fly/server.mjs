@@ -1,7 +1,7 @@
 import debugModule from 'debug';
 import express from 'express';
-import { handler as ssrHandler } from '../dist/server/entry.mjs';
-const debug = debugModule('cookbook');
+import { handler as ssrHandler } from './dist/server/entry.mjs';
+const debug = debugModule('pbotcrawl');
 
 const host = process.env.HOST ? process.env.HOST : 'localhost';
 const port = process.env.PORT ? Number.parseInt(process.env.PORT) : 3000;

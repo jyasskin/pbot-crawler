@@ -11,6 +11,19 @@ datasource db {
 }
 
 model Subscription {
-  email     String   @unique @id
-  subscribedAt DateTime @default(now())
+  email             String   @id @unique
+  // How we address the subscriber in emails.
+  name              String?
+  subscribedAt      DateTime @default(now())
+  // base-64 128-bit string that can be used to unsubscribe.
+  unsubscribeSecret String
+}
+
+model CrawlState {
+  // Always a YYYY-MM-DD string.
+  crawl_date String @id @unique
+  // Enumerated state for the crawl:
+  // * "sending": there's an active attempt to send out the crawl. Don't start another one.
+  // * "sent": the crawl has been emailed to subscribers.
+  state      String
 }

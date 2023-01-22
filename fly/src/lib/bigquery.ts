@@ -52,7 +52,7 @@ export async function find_crawl_dates(current_crawl?: Temporal.PlainDate): Prom
 }
 
 export type PagesResult = {
-    pages: any[];
+    pages: { page: string, diff: string }[];
     more_available: boolean;
     total_rows: number;
 }

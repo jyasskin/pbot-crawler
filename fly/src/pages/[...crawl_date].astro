@@ -4,14 +4,9 @@ import MaybeDetails from "@components/MaybeDetails.astro";
 import PrettyDiff from "@components/PrettyDiff.astro";
 import Layout from "@layouts/Layout.astro";
 import { find_crawl_dates,get_pages_with_change } from "@lib/bigquery";
-import { parse_crawl_date } from "@lib/util";
+import { parse_crawl_date,without_origin } from "@lib/util";
 import debugModule from "debug";
 const debug = debugModule("pbotcrawl");
-
-function without_origin(url: string): string {
-    const parsed = new URL(url);
-    return `${parsed.pathname}${parsed.search}`;
-}
 
 const { crawl_date } = Astro.params;
 
