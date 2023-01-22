@@ -1,13 +1,8 @@
 ---
-interface Props {
-    when: boolean;
-}
-
-const { when } = Astro.props;
 ---
 
 {
-    when ? (
+    Astro.slots.has("details") ? (
         <details>
             <>
                 <summary>

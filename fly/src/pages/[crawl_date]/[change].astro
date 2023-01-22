@@ -1,0 +1,72 @@
+---
+import ArchiveLink from "@components/ArchiveLink.astro";
+import MaybeDetails from "@components/MaybeDetails.astro";
+import PrettyDiff from "@components/PrettyDiff.astro";
+import Layout from "@layouts/Layout.astro";
+import { find_crawl_dates,get_pages_with_change } from "@lib/bigquery";
+import { debug } from "@lib/debug";
+import { parse_crawl_date,without_origin } from "@lib/util";
+
+const { crawl_date, change } = Astro.params;
+
+let parsed_crawl_date = parse_crawl_date(crawl_date);
+if (crawl_date !== undefined && parsed_crawl_date === undefined) {
+    debug({ crawl_date });
+    // The crawl_date wasn't a date.
+    return new Response(undefined, { status: 404 });
+}
+
+const crawl_dates = await find_crawl_dates(parsed_crawl_date);
+if (crawl_dates === undefined) {
+    return new Response(undefined, { status: 404 });
+}
+
+const changeTypes = {
+    new: ["ADD", "New", crawl_dates.current_crawl],
+    removed: ["DEL", "Removed", undefined],
+    modified: ["CHANGE", "Modified", undefined],
+} as const;
+
+if (!Object.keys(changeTypes).includes(change!)) {
+    debug({ change });
+    return new Response(undefined, { status: 404 });
+}
+const [dbChange, textChange, archiveDate] =
+    changeTypes[change as keyof typeof changeTypes];
+
+const changed_pages = await get_pages_with_change({
+    current_crawl: crawl_dates.current_crawl,
+    change: dbChange,
+});
+---
+
+<Layout title={`${textChange} pages in the ${crawl_date} crawl`}>
+    <h1 slot="title">
+        {textChange} pages in the <a href={`/${crawl_dates.current_crawl}`}
+            >{String(crawl_date)} crawl</a
+        >
+    </h1>
+
+    <p>Compared to the {String(crawl_dates.prev_crawl)} crawl.</p>
+
+    <p>All pages are under <code>https://www.portland.gov/</code>.</p>
+
+    <ul>
+        {
+            changed_pages.pages.map((item) => (
+                <li>
+                    <MaybeDetails>
+                        <a href={item.page}>{without_origin(item.page)}</a> [
+                        <ArchiveLink url={item.page} latest_date={archiveDate}>
+                            Archive
+                        </ArchiveLink>
+                        ]
+                        {item.diff ? (
+                            <PrettyDiff slot="details" diff={item.diff} />
+                        ) : null}
+                    </MaybeDetails>
+                </li>
+            ))
+        }
+    </ul>
+</Layout>

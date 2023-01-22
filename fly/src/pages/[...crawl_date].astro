@@ -120,12 +120,12 @@ const [new_pages, removed_pages, modified_pages] = await Promise.all([
             {
                 modified_pages.pages.map((item) => (
                     <li>
-                        <MaybeDetails when={item.diff}>
-                            <a href="{{item.page}}">
-                                {without_origin(item.page)}
-                            </a>
+                        <MaybeDetails>
+                            <a href={item.page}>{without_origin(item.page)}</a>{" "}
                             [<ArchiveLink url={item.page}>Archive</ArchiveLink>]
-                            <PrettyDiff slot="details" diff={item.diff} />
+                            {item.diff ? (
+                                <PrettyDiff slot="details" diff={item.diff} />
+                            ) : null}
                         </MaybeDetails>
                     </li>
                 ))

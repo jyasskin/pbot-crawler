@@ -1,8 +1,8 @@
 import { BigQuery, BigQueryDate } from '@google-cloud/bigquery';
-import debugModule from 'debug';
+import { debug as baseDebug } from '@lib/debug';
 import { Temporal } from 'temporal-polyfill';
 
-const debug = debugModule('pbotcrawl:bigquery');
+const debug = baseDebug.extend('bigquery');
 const bigqueryClient = new BigQuery({
     // GOOGLE_SERVICE_ACCOUNT was generated using the process at
     // https://cloud.google.com/iam/docs/creating-managing-service-account-keys#creating and saved
