@@ -1,0 +1,61 @@
+---
+import Layout from "@layouts/Layout.astro";
+import { prisma } from "@lib/prisma";
+import { renderEmail } from "@lib/util";
+import { Prisma,Subscription } from "@prisma/client";
+
+const searchParams = Astro.url.searchParams;
+
+const email = searchParams.get("email");
+const unsubscribeSecret = searchParams.get("secret");
+
+let deleteResult: Subscription | null = null;
+if (email && unsubscribeSecret) {
+    try {
+        deleteResult = await prisma.subscription.delete({
+            where: {
+                email,
+                unsubscribeSecret,
+            },
+        });
+    } catch (e) {
+        if (
+            e instanceof Prisma.PrismaClientKnownRequestError &&
+            e.code == "P2025"
+        ) {
+            // Either the email wasn't found, or the secret was wrong. Send the user back to their
+            // email.
+        } else {
+            throw e;
+        }
+    }
+}
+---
+
+<Layout title="Unsubscribing from crawl results">
+    {
+        deleteResult ? (
+            <p>
+                You've unsubscribed
+                {renderEmail(deleteResult.email, deleteResult.name)} from the
+                <a href="/">weekly PBOT crawl report</a>.
+            </p>
+        ) : email ?
+        <p>
+                Either {email} isn't subscribed, or you have the wrong secret to unsubscribe them.
+                Click the unsubscribe link from one of the emails you got. If something's broken
+                about that, <a href="https://github.com/jyasskin/pbot-crawler/issues">
+                    file a bug.
+                </a>
+            </p>
+        :(
+            <p>
+                To unsubscribe, click the unsubscribe link from one of the
+                emails you got. If something's broken about that,
+                <a href="https://github.com/jyasskin/pbot-crawler/issues">
+                    file a bug.
+                </a>
+            </p>
+        )
+    }
+</Layout>

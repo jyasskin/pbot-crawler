@@ -1,21 +1,14 @@
 ---
 import Layout from "@layouts/Layout.astro";
 import { prisma } from "@lib/prisma";
-import { getFormDataString } from "@lib/util";
+import { getFormDataString,renderEmail } from "@lib/util";
 import { Prisma } from "@prisma/client";
 import { randomBytes } from "node:crypto";
 
 let email: string | undefined = undefined;
 let name: string | undefined = undefined;
 let subscribeResult: "exists" | "added" | "none" = "none";
-
-function renderEmail(email: string, name: string | undefined): string {
-    if (name) {
-        return `${name} <${email}>`;
-    } else {
-        return email;
-    }
-}
+const unsubscribeLink = new URL("/unsubscribe", Astro.url);
 
 if (Astro.request.method == "POST") {
     const formData = await Astro.request.formData();
@@ -34,6 +27,8 @@ if (Astro.request.method == "POST") {
                 },
             });
             subscribeResult = "added";
+            unsubscribeLink.searchParams.set("email", email);
+            unsubscribeLink.searchParams.set("secret", unsubscribeSecret);
         } catch (e) {
             if (
                 e instanceof Prisma.PrismaClientKnownRequestError &&
@@ -53,7 +48,11 @@ if (Astro.request.method == "POST") {
         subscribeResult === "exists" ? (
             <p>{renderEmail(email!, name)} is already subscribed.</p>
         ) : subscribeResult === "added" ? (
-            <p>{renderEmail(email!, name)} subscribed to weekly emails.</p>
+            <p>
+                {renderEmail(email!, name)} subscribed to weekly emails. If
+                you've subscribed by mistake, you can
+                <a href={unsubscribeLink.href}>unsubscribe</a>.
+            </p>
         ) : (
             <form method="post">
                 <label>

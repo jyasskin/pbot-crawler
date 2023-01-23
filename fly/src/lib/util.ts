@@ -49,3 +49,11 @@ export function getFormDataString(formData: FormData, name: string): string | un
   }
   return undefined;
 }
+
+export function renderEmail(email: string, name: string | undefined | null): string {
+  if (name) {
+    return `${name} <${email}>`;
+  } else {
+    return email;
+  }
+}
