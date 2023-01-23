@@ -55,7 +55,7 @@ const data = {
     modified: modified.slice(0, 100),
 };
 
-let status: string[] = [];
+const status: string[] = [];
 const html_content = html_template(data);
 const plain_content = plain_template(data);
 const subject = `PBOT website changes from ${prev_crawl} to ${current_crawl}`;
@@ -69,33 +69,53 @@ let sent_status = await prisma.crawlState.findUnique({
     where: { crawl_date: String(current_crawl) },
 });
 
+let response_status = 200;
+const json_result: Record<string, any> = {
+    initial_crawl_state: sent_status,
+};
+
 if (sent_status === null && Astro.request.method == "POST") {
     const sendgrid_api_key = process.env.SENDGRID_API_KEY;
     if (!sendgrid_api_key) {
         status.push("No Sendgrid API key.");
+        json_result.missing_sendgrid_api_key = true;
     } else {
         sendgrid.setApiKey(sendgrid_api_key);
+        sendgrid.setSubstitutionWrappers("[[[", "]]]");
 
         let deleteStateOnFail = false;
         let shouldDeleteState = false;
 
         try {
             // Throws if the crawl_date is already inserted.
-            debug("Recording that we're sending this crawl's mail: %j", await prisma.crawlState.create({
-                data: {
-                    crawl_date: String(current_crawl),
-                    state: sending_states.sending,
-                },
-            }));
+            debug(
+                "Recording that we're sending this crawl's mail: %j",
+                await prisma.crawlState.create({
+                    data: {
+                        crawl_date: String(current_crawl),
+                        state: sending_states.sending,
+                    },
+                })
+            );
             deleteStateOnFail = true;
             const subscriptions = await prisma.subscription.findMany({});
             debug("Sending to: %j", subscriptions);
+            json_result.num_subscriptions = subscriptions.length;
             if (subscriptions.length === 0) {
                 status.push("No subscriptions.");
             }
             const [response] = await sendgrid.send({
                 personalizations: subscriptions.map((subscription) => {
-                    const unsubscribe_url = `https://${Astro.url.host}/unsubscribe?secret=${subscription.unsubscribeSecret}`;
+                    const unsubscribe_url = new URL("/unsubscribe", Astro.url);
+                    unsubscribe_url.protocol = "https";
+                    unsubscribe_url.searchParams.set(
+                        "email",
+                        subscription.email
+                    );
+                    unsubscribe_url.searchParams.set(
+                        "secret",
+                        subscription.unsubscribeSecret
+                    );
                     return {
                         to: [
                             {
@@ -103,11 +123,12 @@ if (sent_status === null && Astro.request.method == "POST") {
                                 name: subscription.name ?? undefined,
                             },
                         ],
+                        // Substitutions are wrapped in the substitution wrapper set above.
                         substitutions: {
-                            "[[[unsubscribe-url]]]": unsubscribe_url,
+                            "unsubscribe_url": unsubscribe_url.href,
                         },
                         headers: {
-                            "List-Unsubscribe": `<${unsubscribe_url}>`,
+                            "List-Unsubscribe": `<${unsubscribe_url.href}>`,
                         },
                     };
                 }),
@@ -123,22 +144,27 @@ if (sent_status === null && Astro.request.method == "POST") {
             });
 
             if (response.statusCode === 202) {
+                response_status = 201; // "201 Created", as in we created the email.
                 // This should only need an update, since we locked the record above, but make sure
                 // that even if something weird happened, we record that the email got sent.
-                debug("Recording that the mail is sent: %j", await prisma.crawlState.upsert({
-                    where: {
-                        crawl_date: String(current_crawl),
-                    },
-                    create: {
-                        crawl_date: String(current_crawl),
-                        state: sending_states.sent,
-                    },
-                    update: {
-                        state: sending_states.sent,
-                    },
-                }));
+                debug(
+                    "Recording that the mail is sent: %j",
+                    await prisma.crawlState.upsert({
+                        where: {
+                            crawl_date: String(current_crawl),
+                        },
+                        create: {
+                            crawl_date: String(current_crawl),
+                            state: sending_states.sent,
+                        },
+                        update: {
+                            state: sending_states.sent,
+                        },
+                    })
+                );
             } else {
-                status.push(JSON.stringify(response.body));
+                response_status = response.statusCode;
+                json_result.sendgrid_response = response.body;
                 shouldDeleteState = true;
             }
         } catch (e) {
@@ -146,15 +172,18 @@ if (sent_status === null && Astro.request.method == "POST") {
                 e instanceof Prisma.PrismaClientKnownRequestError &&
                 e.code === "P2002"
             ) {
+                json_result.concurrent_send = true;
                 sent_status = await prisma.crawlState.findUnique({
                     where: { crawl_date: String(current_crawl) },
                 });
                 if (!sent_status) {
+                    json_result.concurrent_send_failed = true;
                     status.push(
                         "A concurrent attempt to send failed; try again."
                     );
                 }
             } else {
+                json_result.sendgrid_exception = e;
                 status.push(String(e));
                 if (deleteStateOnFail) {
                     shouldDeleteState = true;
@@ -171,6 +200,20 @@ if (sent_status === null && Astro.request.method == "POST") {
             debug("Recorded that the mail didn't get sent: %j", deleteResult);
         }
     }
+}
+
+if (
+    Astro.request.headers
+        .get("accept")
+        ?.split(",")
+        ?.includes("application/json")
+) {
+    return new Response(JSON.stringify(json_result), {
+        status: response_status,
+        headers: {
+            "content-type": "application/json",
+        },
+    });
 }
 ---
 
