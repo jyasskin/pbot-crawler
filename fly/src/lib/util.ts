@@ -33,7 +33,6 @@ export function web_archive(url: string, latest_date?: string | Temporal.PlainDa
   if (latest_date === undefined) {
     date_param = "*";
   } else {
-    debug("latest_date: %o", latest_date);
     if (typeof latest_date === 'string') {
       latest_date = Temporal.PlainDate.from(latest_date);
     }

@@ -1,9 +1,13 @@
 ---
 import Layout from "@layouts/Layout.astro";
 import { find_crawl_dates,get_pages_with_change } from "@lib/bigquery";
+import { debug as debugBase } from "@lib/debug";
 import { html_template,plain_template } from "@lib/handlebars";
 import { prisma } from "@lib/prisma";
+import { Prisma } from "@prisma/client";
 import sendgrid from "@sendgrid/mail";
+
+const debug = debugBase.extend("sendmail");
 
 const crawl_dates = await find_crawl_dates();
 if (!crawl_dates) {
@@ -56,15 +60,36 @@ const html_content = html_template(data);
 const plain_content = plain_template(data);
 const subject = `PBOT website changes from ${prev_crawl} to ${current_crawl}`;
 
-if (Astro.request.method == "POST") {
+const sending_states = {
+    sending: "sending",
+    sent: "sent",
+} as const;
+
+let sent_status = await prisma.crawlState.findUnique({
+    where: { crawl_date: String(current_crawl) },
+});
+
+if (sent_status === null && Astro.request.method == "POST") {
     const sendgrid_api_key = process.env.SENDGRID_API_KEY;
     if (!sendgrid_api_key) {
         status.push("No Sendgrid API key.");
     } else {
         sendgrid.setApiKey(sendgrid_api_key);
 
+        let deleteStateOnFail = false;
+        let shouldDeleteState = false;
+
         try {
+            // Throws if the crawl_date is already inserted.
+            debug("Recording that we're sending this crawl's mail: %j", await prisma.crawlState.create({
+                data: {
+                    crawl_date: String(current_crawl),
+                    state: sending_states.sending,
+                },
+            }));
+            deleteStateOnFail = true;
             const subscriptions = await prisma.subscription.findMany({});
+            debug("Sending to: %j", subscriptions);
             if (subscriptions.length === 0) {
                 status.push("No subscriptions.");
             }
@@ -97,11 +122,53 @@ if (Astro.request.method == "POST") {
                 ],
             });
 
-            if (response.statusCode !== 202) {
+            if (response.statusCode === 202) {
+                // This should only need an update, since we locked the record above, but make sure
+                // that even if something weird happened, we record that the email got sent.
+                debug("Recording that the mail is sent: %j", await prisma.crawlState.upsert({
+                    where: {
+                        crawl_date: String(current_crawl),
+                    },
+                    create: {
+                        crawl_date: String(current_crawl),
+                        state: sending_states.sent,
+                    },
+                    update: {
+                        state: sending_states.sent,
+                    },
+                }));
+            } else {
                 status.push(JSON.stringify(response.body));
+                shouldDeleteState = true;
             }
         } catch (e) {
-            status.push(String(e));
+            if (
+                e instanceof Prisma.PrismaClientKnownRequestError &&
+                e.code === "P2002"
+            ) {
+                sent_status = await prisma.crawlState.findUnique({
+                    where: { crawl_date: String(current_crawl) },
+                });
+                if (!sent_status) {
+                    status.push(
+                        "A concurrent attempt to send failed; try again."
+                    );
+                }
+            } else {
+                status.push(String(e));
+                if (deleteStateOnFail) {
+                    shouldDeleteState = true;
+                }
+            }
+        }
+        if (shouldDeleteState) {
+            const deleteResult = await prisma.crawlState.delete({
+                where: {
+                    crawl_date: String(current_crawl),
+                    state: sending_states.sending,
+                },
+            });
+            debug("Recorded that the mail didn't get sent: %j", deleteResult);
         }
     }
 }
@@ -109,7 +176,17 @@ if (Astro.request.method == "POST") {
 
 <Layout title="Sending crawl to subscribers">
     {
-        Astro.request.method == "POST" ? null : (
+        sent_status?.state === "sent" ? (
+            <p>
+                The {String(current_crawl)} crawl has already been sent to
+                subscribers.
+            </p>
+        ) : sent_status?.state === "sending" ? (
+            <p>
+                Another request is currently sending the {String(current_crawl)}{" "}
+                crawl to subscribers.
+            </p>
+        ) : Astro.request.method == "POST" ? null : (
             <form method="post">
                 <button>Send</button>
             </form>
