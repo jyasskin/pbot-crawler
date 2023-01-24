@@ -5,6 +5,8 @@ WORKDIR /app
 
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
+RUN apk --no-cache add sqlite
+
 COPY package.json pnpm-lock.yaml ./
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store/v3 pnpm i --frozen-lockfile --prod
 

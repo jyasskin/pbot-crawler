@@ -1,0 +1,23 @@
+name: Deploy to Fly.io
+on:
+  push:
+    branches:
+    - main
+jobs:
+  fly:
+    runs-on: ubuntu-latest
+    environment:
+      name: prod
+      url: "https://pbot-crawler.fly.dev/"
+    steps:
+    - uses: actions/checkout@v3
+    - uses: superfly/flyctl-actions/setup-flyctl@master
+    - name: Build the image.
+      run: flyctl deploy --remote-only --image-label ${{ github.sha }} --build-only --push fly
+      env:
+        FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        NO_COLOR: 1
+    - name: Update the machine's image.
+      run: flyctl image update --image registry.fly.io/pbot-crawler:${{ github.sha }} -a pbot-crawler --yes
+      env:
+        FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
