@@ -17,12 +17,12 @@
   },
   "packageManager": "pnpm@11.11.0+sha512.4463f65fd80ed80d69bc1d4bf163ee94f605c7380fc318bb5b2ebe15f8cd12d49c51a4d59e951b401e764d3b6ca751cbf51bc50ed7001a6bcb4935e684c34882",
   "dependencies": {
-    "@astrojs/node": "^4.0.0",
+    "@astrojs/node": "^11.0.2",
     "@google-cloud/bigquery": "^6.0.3",
     "@prisma/adapter-better-sqlite3": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "@sendgrid/mail": "^7.7.0",
-    "astro": "^1.9.2",
+    "astro": "^7.0.7",
     "debug": "^4.3.4",
     "express": "^4.18.2",
     "handlebars": "^4.7.7",
@@ -30,6 +30,7 @@
     "temporal-polyfill": "^1.0.1"
   },
   "devDependencies": {
+    "@astrojs/check": "^0.9.9",
     "@types/debug": "^4.1.7",
     "@types/node": "^24.13.3",
     "ts-node": "^10.9.1",

@@ -70,6 +70,7 @@ let sent_status = await prisma.crawlState.findUnique({
 });
 
 let response_status = 200;
+response_status = response_status; // Suppress broken unused warning.
 const json_result: Record<string, any> = {
     initial_crawl_state: sent_status,
 };
