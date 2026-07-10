@@ -1,8 +1,8 @@
 ---
+import { Prisma, Subscription } from "@generated/prisma/client";
 import Layout from "@layouts/Layout.astro";
 import { prisma } from "@lib/prisma";
 import { renderEmail } from "@lib/util";
-import { Prisma,Subscription } from "@prisma/client";
 
 const searchParams = Astro.url.searchParams;
 

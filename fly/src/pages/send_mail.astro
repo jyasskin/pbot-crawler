@@ -1,10 +1,10 @@
 ---
+import { Prisma } from "@generated/prisma/client";
 import Layout from "@layouts/Layout.astro";
-import { find_crawl_dates,get_pages_with_change } from "@lib/bigquery";
+import { find_crawl_dates, get_pages_with_change } from "@lib/bigquery";
 import { debug as debugBase } from "@lib/debug";
-import { html_template,plain_template } from "@lib/handlebars";
+import { html_template, plain_template } from "@lib/handlebars";
 import { prisma } from "@lib/prisma";
-import { Prisma } from "@prisma/client";
 import sendgrid from "@sendgrid/mail";
 
 const debug = debugBase.extend("sendmail");

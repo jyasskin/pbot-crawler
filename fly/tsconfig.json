@@ -1,11 +1,12 @@
 {
   "extends": "astro/tsconfigs/strictest",
   "compilerOptions": {
-    "baseUrl": ".",
+    "baseUrl": "./",
     "paths": {
-      "@components/*": ["src/components/*"],
-      "@layouts/*": ["src/layouts/*"],
-      "@lib/*": ["src/lib/*"]
+      "@components/*": ["./src/components/*"],
+      "@generated/*": ["./src/generated/*"],
+      "@layouts/*": ["./src/layouts/*"],
+      "@lib/*": ["./src/lib/*"]
     },
     "exactOptionalPropertyTypes": false
   }
