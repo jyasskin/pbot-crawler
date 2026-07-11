@@ -164,6 +164,7 @@ if (sent_status === null && Astro.request.method == "POST") {
                     })
                 );
             } else {
+                debug("Sendgrid failed: %o", response)
                 response_status = response.statusCode;
                 json_result.sendgrid_response = response.body;
                 shouldDeleteState = true;
