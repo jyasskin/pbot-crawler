@@ -50,7 +50,7 @@ if (Astro.request.method == "POST") {
         ) : subscribeResult === "added" ? (
             <p>
                 {renderEmail(email!, name)} subscribed to weekly emails. If
-                you've subscribed by mistake, you can
+                you've subscribed by mistake, you can{' '}
                 <a href={unsubscribeLink.href}>unsubscribe</a>.
             </p>
         ) : (

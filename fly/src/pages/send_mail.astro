@@ -5,7 +5,7 @@ import { find_crawl_dates, get_pages_with_change } from "@lib/bigquery";
 import { debug as debugBase } from "@lib/debug";
 import { html_template, plain_template } from "@lib/handlebars";
 import { prisma } from "@lib/prisma";
-import sendgrid from "@sendgrid/mail";
+import { Resend } from "resend";
 
 const debug = debugBase.extend("sendmail");
 
@@ -32,7 +32,7 @@ const boringRE = new RegExp(
             "/services",
         ].join("|") +
         String.raw`)(?:\?|$)`,
-    "i"
+    "i",
 );
 
 function interesting(row: { page: string }): boolean {
@@ -76,13 +76,12 @@ const json_result: Record<string, any> = {
 };
 
 if (sent_status === null && Astro.request.method == "POST") {
-    const sendgrid_api_key = process.env.SENDGRID_API_KEY;
-    if (!sendgrid_api_key) {
-        status.push("No Sendgrid API key.");
-        json_result.missing_sendgrid_api_key = true;
+    const resend_api_key = process.env.RESEND_API_KEY;
+    if (!resend_api_key) {
+        status.push("No Resend API key.");
+        json_result.missing_resend_api_key = true;
     } else {
-        sendgrid.setApiKey(sendgrid_api_key);
-        sendgrid.setSubstitutionWrappers("[[[", "]]]");
+        const resend = new Resend(resend_api_key);
 
         let deleteStateOnFail = false;
         let shouldDeleteState = false;
@@ -96,7 +95,7 @@ if (sent_status === null && Astro.request.method == "POST") {
                         crawl_date: String(current_crawl),
                         state: sending_states.sending,
                     },
-                })
+                }),
             );
             deleteStateOnFail = true;
             const subscriptions = await prisma.subscription.findMany({});
@@ -105,46 +104,48 @@ if (sent_status === null && Astro.request.method == "POST") {
             if (subscriptions.length === 0) {
                 status.push("No subscriptions.");
             }
-            const [response] = await sendgrid.send({
-                personalizations: subscriptions.map((subscription) => {
+            if (subscriptions.length > 90) {
+                debug(
+                    "Getting close to the 100-message batch limit: %d",
+                    subscriptions.length,
+                );
+            }
+            const response = await resend.batch.send(
+                subscriptions.map((subscription) => {
                     const unsubscribe_url = new URL("/unsubscribe", Astro.url);
                     unsubscribe_url.protocol = "https";
                     unsubscribe_url.searchParams.set(
                         "email",
-                        subscription.email
+                        subscription.email,
                     );
                     unsubscribe_url.searchParams.set(
                         "secret",
-                        subscription.unsubscribeSecret
+                        subscription.unsubscribeSecret,
                     );
                     return {
-                        to: [
-                            {
-                                email: subscription.email,
-                                name: subscription.name ?? undefined,
-                            },
-                        ],
-                        // Substitutions are wrapped in the substitution wrapper set above.
-                        substitutions: {
-                            "unsubscribe_url": unsubscribe_url.href,
-                        },
+                        from: "Jeffrey Yasskin <weekly-report@pbot-crawl.jeffrey.yasskin.info>",
+                        to: subscription.name
+                            ? `${subscription.name.replaceAll("<", "lt")} <${subscription.email}>`
+                            : subscription.email,
+                        subject,
+                        html: html_content.replaceAll(
+                            "[[[unsubscribe_url]]]",
+                            unsubscribe_url.href,
+                        ),
+                        text: plain_content.replaceAll(
+                            "[[[unsubscribe_url]]]",
+                            unsubscribe_url.href,
+                        ),
                         headers: {
                             "List-Unsubscribe": `<${unsubscribe_url.href}>`,
+                            "List-Unsubscribe-Post":
+                                "List-Unsubscribe=One-Click",
                         },
                     };
                 }),
-                from: {
-                    email: "pbot-crawl-reports@yasskin.info",
-                    name: "Jeffrey Yasskin",
-                },
-                subject,
-                content: [
-                    { type: "text/plain", value: plain_content },
-                    { type: "text/html", value: html_content },
-                ],
-            });
+            );
 
-            if (response.statusCode === 202) {
+            if (response.error === null) {
                 response_status = 201; // "201 Created", as in we created the email.
                 // This should only need an update, since we locked the record above, but make sure
                 // that even if something weird happened, we record that the email got sent.
@@ -161,12 +162,12 @@ if (sent_status === null && Astro.request.method == "POST") {
                         update: {
                             state: sending_states.sent,
                         },
-                    })
+                    }),
                 );
             } else {
-                debug("Sendgrid failed: %o", response)
-                response_status = response.statusCode;
-                json_result.sendgrid_response = response.body;
+                debug("Resend service failed: %o", response.error);
+                response_status = response.error.statusCode ?? 400;
+                json_result.resend_service_response = response.error.message;
                 shouldDeleteState = true;
             }
         } catch (e) {
@@ -181,11 +182,11 @@ if (sent_status === null && Astro.request.method == "POST") {
                 if (!sent_status) {
                     json_result.concurrent_send_failed = true;
                     status.push(
-                        "A concurrent attempt to send failed; try again."
+                        "A concurrent attempt to send failed; try again.",
                     );
                 }
             } else {
-                json_result.sendgrid_exception = e;
+                json_result.resend_service_exception = e;
                 status.push(String(e));
                 if (deleteStateOnFail) {
                     shouldDeleteState = true;
