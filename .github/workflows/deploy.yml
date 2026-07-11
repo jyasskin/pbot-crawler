@@ -12,12 +12,8 @@ jobs:
     steps:
     - uses: actions/checkout@v7
     - uses: superfly/flyctl-actions/setup-flyctl@master
-    - name: Build the image.
-      run: flyctl deploy --remote-only --image-label ${{ github.sha }} --build-only --push fly
+    - name: Deploy the updated app.
+      run: flyctl deploy fly
       env:
         FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         NO_COLOR: 1
-    - name: Update the machine's image.
-      run: flyctl image update --image registry.fly.io/pbot-crawler:${{ github.sha }} -a pbot-crawler --yes
-      env:
-        FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
