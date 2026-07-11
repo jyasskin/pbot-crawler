@@ -8,5 +8,9 @@ export default defineConfig({
   output: "server",
   adapter: node({
     mode: "standalone",
-  })
+  }),
+  security: {
+    // Allow the send_mail POST from outside this server.
+    checkOrigin: false
+  },
 });
