@@ -99,7 +99,10 @@ if (sent_status === null && Astro.request.method == "POST") {
             );
             deleteStateOnFail = true;
             const subscriptions = await prisma.subscription.findMany({});
-            debug("Sending to: %j", subscriptions);
+            debug(
+                "Sending to: %j",
+                subscriptions.map(({ email }) => email),
+            );
             json_result.num_subscriptions = subscriptions.length;
             if (subscriptions.length === 0) {
                 status.push("No subscriptions.");
