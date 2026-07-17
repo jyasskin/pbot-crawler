@@ -4,6 +4,10 @@ sqlite.db*
 # build output
 dist/
 .output/
+src/generated/
+
+# Scratch files
+tmp/
 
 # generated types
 .astro/
