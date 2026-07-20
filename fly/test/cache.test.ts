@@ -5,7 +5,7 @@ import { sha256 } from "@lib/util";
 import nock from "nock";
 import { beforeEach, expect, test, vi } from "vitest";
 
-const TEST_LINK_TARGET = "https://www.portland.gov/transportation/link/target";
+//const TEST_LINK_TARGET = "https://www.portland.gov/transportation/link/target";
 const TEST_PAGE1 = "https://www.portland.gov/transportation";
 const TEST_PAGE2 = "https://www.portland.gov/transportation/has-text-content";
 const THE_ETAG = "This is an ETag";
