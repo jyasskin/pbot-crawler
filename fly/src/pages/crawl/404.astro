@@ -1,0 +1,23 @@
+---
+import Layout from "@layouts/Layout.astro";
+import { prisma } from "@lib/prisma";
+
+Astro.response.status = 404;
+
+const date = Astro.url.searchParams.get("date");
+const latestCrawl = await prisma.crawl.findFirst({
+  orderBy: { startTime: "desc" },
+  select: {date: true},
+});
+if (date === null || latestCrawl === null) {
+  // If latestCrawl is null, send them to /crawl to get the first crawl started.
+  return Astro.redirect("/crawl", 303);
+}
+---
+
+<Layout title={`${date} crawl not found.`}>
+  <p>
+    The most recent crawl is from <a href={`/crawl/${latestCrawl.date}`}
+      >{latestCrawl.date}</a>
+  </p>
+</Layout>

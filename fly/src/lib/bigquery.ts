@@ -1,6 +1,6 @@
 import { BigQuery, BigQueryDate } from '@google-cloud/bigquery';
 import { debug as baseDebug } from '@lib/debug';
-import { Temporal } from 'temporal-polyfill';
+import "temporal-polyfill/global";
 
 const debug = baseDebug.extend('bigquery');
 const bigqueryClient = new BigQuery({

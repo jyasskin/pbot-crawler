@@ -1,23 +1,33 @@
 ---
+import { continueCrawl } from '@lib/crawl';
+
 export interface Props {
-    title: string;
+  title: string;
 }
 
 const { title } = Astro.props;
 
-Astro.slots
+// On every page load, see if we need to continue a failed crawl.
+void continueCrawl()
 ---
 
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width" />
-        <meta name="generator" content={Astro.generator} />
-        <title>{title}</title>
-    </head>
-    <body>
-        {Astro.slots.has("title") ? <slot name="title"/> : <h1>{title}</h1>}
-        <slot />
-    </body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title}</title>
+  </head>
+  <body>
+    {Astro.slots.has("title") ? <slot name="title" /> : <h1>{title}</h1>}
+    <slot />
+  </body>
 </html>
+
+<script>
+  // Emulate a client hint for date formatting options.
+  const formatterOptions = new Intl.DateTimeFormat().resolvedOptions();
+  document.cookie = `locale=${formatterOptions.locale}`;
+  document.cookie = `timeZoneId=${formatterOptions.timeZone}`;
+</script>

@@ -1,0 +1,83 @@
+---
+import Layout from "@layouts/Layout.astro";
+import { readyToCrawlAgain, startCrawl } from "@lib/crawl";
+import { prisma } from "@lib/prisma";
+import { timeFormatterFromCookies } from "@lib/util";
+
+const latestCrawl = await prisma.crawl.findFirst({
+  orderBy: { startTime: "desc" },
+});
+if (latestCrawl === null) {
+  // Normally we would only start a crawl with a POST, but I'd like to be able to assume in the
+  // rest of this page that _some_ crawl always exists.
+  const nextCrawl = await startCrawl(latestCrawl);
+  if (nextCrawl === undefined) {
+    // Race. Reload the page to try again.
+    return Astro.redirect(`/crawl`, 303);
+  }
+  return Astro.redirect(`/crawl/${nextCrawl?.date}`, 303);
+}
+
+if (Astro.request.method === "POST") {
+  if (latestCrawl.endTime === null) {
+    // Still running; redirect to its info page.
+    return Astro.redirect(`/crawl/${latestCrawl.date}`, 303);
+  }
+  if (readyToCrawlAgain(latestCrawl)) {
+    const nextCrawl = await startCrawl(latestCrawl);
+    if (nextCrawl === undefined) {
+      // Race. Reload the page to try again.
+      return Astro.redirect(`/crawl`, 303);
+    }
+    return Astro.redirect(`/crawl/${nextCrawl.date}`, 303);
+  }
+  return new Response(
+    `Can only start one crawl each week. ` +
+      `Last crawl ran from ${latestCrawl.startTime.toLocaleString()} to ${latestCrawl.endTime.toLocaleString()}.`,
+    { status: 429 },
+  );
+}
+
+if (!["SENT", "COMPLETE"].includes(latestCrawl.state)) {
+  return Astro.redirect(`/crawl/${latestCrawl.date}`, 303);
+}
+
+const crawlInfo = await prisma.crawl.findUniqueOrThrow({
+  where: { date: latestCrawl.date },
+  select: {
+    startTime: true,
+    endTime: true,
+    error: true,
+    _count: {
+      select: {
+        pages: { where: { httpStatus: { lt: 400 } } },
+      },
+    },
+  },
+});
+
+const timeFormatter = timeFormatterFromCookies(Astro.cookies);
+---
+
+<Layout title="No active crawl">
+  {
+    readyToCrawlAgain(latestCrawl) ? (
+      <form method="POST">
+        <button>Start one.</button>
+      </form>
+    ) : null
+  }
+
+  <p>
+    The latest crawl {
+      crawlInfo.endTime
+        ? `ran ${timeFormatter.formatRange(
+            crawlInfo.startTime,
+            crawlInfo.endTime,
+          )}`
+        : `started at ${timeFormatter.format(crawlInfo.startTime)}`
+    }, finding {crawlInfo._count.pages} pages. See more <a
+      href={`/crawl/${latestCrawl.date}`}>details</a
+    >.
+  </p>
+</Layout>

@@ -3,7 +3,7 @@
 
 generator client {
   provider = "prisma-client"
-  output = "../src/generated/prisma"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
@@ -26,4 +26,144 @@ model CrawlState {
   // * "sending": there's an active attempt to send out the crawl. Don't start another one.
   // * "sent": the crawl has been emailed to subscribers.
   state      String
+}
+
+enum OverallCrawlState {
+  /// The server is actively crawling pages. There are pages in the crawl's CrawledPage table
+  /// in the TODO state.
+  RUNNING
+  /// Something went wrong. There should be a description in the 'error' column.
+  ERROR
+  /// The crawl is complete but hasn't been mailed out yet. A new crawl could start, in theory.
+  COMPLETE
+  /// There's an active attempt to send out the crawl. Don't start another one.
+  SENDING
+  /// The crawl has been emailed to subscribers.
+  SENT
+}
+
+model Crawl {
+  // Always a YYYY-MM-DD string.
+  date          String    @id @unique
+  prevCrawlDate String?   @unique
+  prevCrawl     Crawl?    @relation(name: "crawlOrder", fields: [prevCrawlDate], references: [date], onDelete: SetNull)
+  nextCrawl     Crawl?    @relation(name: "crawlOrder")
+  startTime     DateTime  @default(now())
+  endTime       DateTime?
+
+  state OverallCrawlState
+  /// Present in the ERROR state.
+  error String?
+
+  pages CrawledPage[]
+}
+
+model KnownUrl {
+  id     Int           @id @default(autoincrement())
+  url    String        @unique
+  crawls CrawledPage[]
+  cache  CachedPage[]
+
+  linkedFrom ContentStore[]
+}
+
+/// Implements an RFC9111 HTTP cache.
+model CachedPage {
+  urlId      Int      @id
+  url        KnownUrl @relation(fields: [urlId], references: [id], onDelete: Cascade)
+  fetchStart DateTime
+  fetchEnd   DateTime
+
+  httpStatus   Int
+  excluded     Exclusion?
+  eTag         String?
+  lastModified String?
+  location     String?
+  contentType  String?
+
+  contentHash       Bytes?
+  normalizedContent ContentStore? @relation(fields: [contentHash], references: [hash])
+}
+
+enum PageCrawlState {
+  /// The URL is known, but it hasn't been fetched in the current crawl yet.
+  TODO
+  /// The server is actively fetching this URL. If the server crashes, the fetch will need to be
+  /// restarted.
+  FETCHING
+  /// The URL has been fetched, and should not be fetched again in the current crawl.
+  DONE
+}
+
+enum PageChange {
+  /// The resource is new since the last crawl.
+  NEW
+  /// The resource didn't change since the last crawl.
+  SAME
+  /// There's still a resource at this URL, but its content changed.
+  CHANGED
+  /// The resource disappeared since the last crawl.
+  REMOVED
+}
+
+enum Exclusion {
+  /// Excluded from the crawl by robots.txt
+  ROBOTS
+  /// Excluded from the crawl by the scope restriction.
+  SCOPE
+}
+
+/// Represents pages crawled during a particular crawl.
+///
+/// When the crawl starts, all known URLs are inserted here in state=TODO. They're fetched one at a
+/// time (adding discovered URLs as needed), and when all have state=DONE, the crawl is finished.
+model CrawledPage {
+  crawlDate String
+  crawl     Crawl    @relation(fields: [crawlDate], references: [date], onDelete: Cascade)
+  urlId     Int
+  url       KnownUrl @relation(fields: [urlId], references: [id], onDelete: Cascade)
+
+  state  PageCrawlState @default(TODO)
+  change PageChange?
+
+  excluded Exclusion?
+
+  fetchStart    DateTime?
+  fetchEnd      DateTime?
+  /// If fetch() threw an exception, which indicates a network error, this will be non-null, and
+  /// fetchRetries and nextFetchTime will be filled in.
+  fetchError    String?
+  fetchRetries  Int       @default(0)
+  nextFetchTime DateTime?
+
+  // Fetch results. These are non-null once fetchEnd is filled in.
+  /// -1 if there were too many network errors.
+  httpStatus   Int?
+  eTag         String?
+  lastModified String?
+  location     String?
+  contentType  String?
+
+  contentHash       Bytes?
+  normalizedContent ContentStore? @relation(fields: [contentHash], references: [hash])
+
+  @@id([crawlDate, urlId])
+  // Lets the server efficiently find the next uncrawled page.
+  @@index([crawlDate, state])
+}
+
+model ContentStore {
+  /// SHA-256
+  hash    Bytes  @id
+  /// Normalized and converted to markdown to focus on significant changes.
+  content String @unique
+
+  /// Since we transform resources before storing them, several different original sizes could be
+  /// associated with a single resource. Ideally I'd record the range of sizes, but that's more
+  /// complicated to implement until https://github.com/prisma/prisma/issues/23471 is implemented.
+  latestRetrievedSize Int
+  links               KnownUrl[]
+
+  caches CachedPage[]
+  crawls CrawledPage[]
 }
