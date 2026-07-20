@@ -5,9 +5,9 @@
   "private": true,
   "license": "Apache 2",
   "scripts": {
-    "generate": "dotenv -- prisma generate",
-    "dev": "astro dev",
-    "start": "node ./dist/server/entry.mjs",
+    "generate": "prisma generate",
+    "dev": "dotenv -- astro dev",
+    "start": "dotenv -- node ./dist/server/entry.mjs",
     "start:prod": "prisma migrate deploy && node ./dist/server/entry.mjs",
     "build": "pnpm generate && astro build",
     "preview": "astro preview",
