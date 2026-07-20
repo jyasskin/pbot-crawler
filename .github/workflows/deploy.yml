@@ -1,19 +1,36 @@
-name: Deploy to Fly.io
+name: Test and Deploy to Fly.io
 on:
+  pull_request:
   push:
-    branches:
-    - main
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: "fly/package.json"
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: "fly/package.json"
+          cache: true
+          cache_dependency_path: "fly/pnpm-lock.yaml"
+          run_install: |
+            - cwd: "fly"
+      - run: pnpm test
+        working-directory: "fly"
   fly:
     runs-on: ubuntu-latest
+    needs: test
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     environment:
       name: prod
       url: "https://pbot-crawler.fly.dev/"
     steps:
-    - uses: actions/checkout@v7
-    - uses: superfly/flyctl-actions/setup-flyctl@master
-    - name: Deploy the updated app.
-      run: flyctl deploy fly
-      env:
-        FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-        NO_COLOR: 1
+      - uses: actions/checkout@v7
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Deploy the updated app.
+        run: flyctl deploy fly
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          NO_COLOR: 1

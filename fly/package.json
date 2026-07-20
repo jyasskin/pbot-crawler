@@ -7,8 +7,8 @@
   "scripts": {
     "generate": "prisma generate",
     "dev": "dotenv -- astro dev",
-    "test": "pnpm generate && DATABASE_URL=file:./test.db prisma db push --force-reset && DATABASE_URL=file:./test.db vitest run",
-    "test:watch": "pnpm generate && DATABASE_URL=file:./test.db prisma db push --force-reset && DATABASE_URL=file:./test.db vitest watch",
+    "test": "pnpm generate && pnpm astro check && DATABASE_URL=file:./test.db prisma db push --force-reset && DATABASE_URL=file:./test.db vitest run",
+    "test:watch": "pnpm generate && pnpm astro check && DATABASE_URL=file:./test.db prisma db push --force-reset && DATABASE_URL=file:./test.db vitest watch",
     "start": "dotenv -- node ./dist/server/entry.mjs",
     "start:prod": "prisma migrate deploy && node ./dist/server/entry.mjs",
     "build": "pnpm generate && astro build",
