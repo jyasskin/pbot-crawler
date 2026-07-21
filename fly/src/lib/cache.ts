@@ -106,15 +106,24 @@ export async function fetchWithCache(
     // Cache miss: insert the new content.
 
     // Only store content if the server sent HTML.
-    const content =
+    let contentStoreUpsert = undefined;
+    if (
       response.status === 200 &&
       response.headers.get("content-type")?.startsWith("text/html")
-        ? normalizeHtml(await response.text(), url.url)
-        : null;
-    return await prisma.cachedPage.upsert({
-      where: { urlId: url.id },
-      create: {
-        url: { connect: { id: url.id } },
+    ) {
+      contentStoreUpsert = {
+        ...normalizeHtml(await response.text(), url.url),
+        select: { hash: true },
+      };
+    }
+    // Transaction to ensure that even if we GC content store entries, this one still exists when
+    // it's used for the cache update.
+    return await prisma.$transaction(async (tx) => {
+      const contentHash =
+        contentStoreUpsert &&
+        (await tx.contentStore.upsert(contentStoreUpsert)).hash;
+
+      const update = {
         fetchStart,
         fetchEnd: new Date(),
         httpStatus: response.status,
@@ -123,27 +132,24 @@ export async function fetchWithCache(
         location: response.headers.get("location"),
         contentType: response.headers.get("content-type"),
         lastModified: response.headers.get("last-modified"),
-        normalizedContent: content
-          ? {
-              connectOrCreate: {
-                where: content.where,
-                create: content.create,
-              },
-            }
-          : undefined,
-      },
-      update: {
-        fetchStart,
-        fetchEnd: new Date(),
-        httpStatus: response.status,
-        excluded: null,
-        eTag: response.headers.get("etag"),
-        location: response.headers.get("location"),
-        contentType: response.headers.get("content-type"),
-        lastModified: response.headers.get("last-modified"),
-        normalizedContent: content ? { upsert: content } : { disconnect: true },
-      },
-      include,
+      } satisfies CachedPageUpdateInput;
+      return await tx.cachedPage.upsert({
+        where: { urlId: url.id },
+        create: {
+          url: { connect: { id: url.id } },
+          ...update,
+          normalizedContent: contentHash
+            ? { connect: { hash: contentHash } }
+            : undefined,
+        },
+        update: {
+          ...update,
+          normalizedContent: contentHash
+            ? { connect: { hash: contentHash } }
+            : { disconnect: true },
+        },
+        include,
+      });
     });
   } finally {
     controller.abort();

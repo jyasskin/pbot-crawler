@@ -114,7 +114,7 @@ test("cached response stale", async () => {
   expect(
     await fetchWithCache(page1, Temporal.Instant.from("2022-09-27T00:00Z")),
   ).toEqual({
-    contentHash: new Uint8Array(sha256("Page content")),
+    contentHash: sha256("Page content\n"),
     contentType: "text/html",
     eTag: "New etag",
     excluded: null,

@@ -1,7 +1,4 @@
-import type {
-  ContentStoreUpsertWithoutCachesInput,
-  ContentStoreWhereUniqueInput,
-} from "@generated/prisma/models/ContentStore";
+import type { ContentStoreUpsertArgs } from "@generated/prisma/models/ContentStore";
 import type { KnownUrlCreateOrConnectWithoutLinkedFromInput } from "@generated/prisma/models/KnownUrl";
 import { fromHtml } from "hast-util-from-html";
 import { toMdast } from "hast-util-to-mdast";
@@ -29,9 +26,7 @@ export function cleanContent(content: string): string {
 export function normalizeHtml(
   html: string,
   baseUrl: string | URL,
-): ContentStoreUpsertWithoutCachesInput & {
-  where: ContentStoreWhereUniqueInput;
-} {
+): Pick<ContentStoreUpsertArgs, "where" | "create" | "update"> {
   const latestRetrievedSize = html.length;
   html = cleanContent(html);
   const tree = fromHtml(html);
