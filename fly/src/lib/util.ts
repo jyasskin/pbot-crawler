@@ -138,3 +138,6 @@ export const fetchWithDistinctiveExceptions: typeof fetch = async (
     throw new FetchError(e);
   });
 };
+
+export const HTTP_TEMP_REDIRECT_WITH_GET = 303;
+export const HTTP_TEMP_REDIRECT_SAME_METHOD = 307;

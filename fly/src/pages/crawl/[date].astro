@@ -38,7 +38,7 @@ type PageState = keyof typeof PAGE_STATE_NAMES;
 const pages = Object.groupBy(crawl.pages, (page): PageState => {
   if (page.state !== "DONE") return page.state;
   if (page.excluded) return page.excluded;
-  if (page.fetchError && page.httpStatus === null) return "FETCH_ERROR"
+  if (page.fetchError && page.httpStatus === null) return "FETCH_ERROR";
   if (page.httpStatus === null) return "MISSING";
   if (page.httpStatus >= 500) return "SERVER_ERROR";
   if (page.httpStatus >= 400) return "ERROR";
@@ -141,8 +141,12 @@ function formatFetchRange(
             {group.map((page) => (
               <>
                 <li>
-                  {page.url.url}
-                  {field === "TODO" || page.excluded!=null ? null : (
+                  <a
+                    href={`/crawl/${date}/${encodeURIComponent(page.url.url)}`}
+                  >
+                    {page.url.url}
+                  </a>
+                  {field === "TODO" || page.excluded != null ? null : (
                     <>
                       : {page.change}{" "}
                       {formatFetchRange(page.fetchStart, page.fetchEnd)},{" "}

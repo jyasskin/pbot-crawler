@@ -1,0 +1,119 @@
+---
+import Layout from "@layouts/Layout.astro";
+import { stripPrefix } from "@lib/crawl_config";
+import { prisma } from "@lib/prisma";
+import { HTTP_TEMP_REDIRECT_WITH_GET } from "@lib/util";
+import { Debug } from "astro:components";
+import { toHtml } from "hast-util-to-html";
+import { fromMarkdown } from "mdast-util-from-markdown";
+import { gfmFromMarkdown } from "mdast-util-gfm";
+import { toHast } from "mdast-util-to-hast";
+import { gfm } from "micromark-extension-gfm";
+
+const { date, escapedPage } = Astro.params;
+
+if (date === undefined) {
+  return Astro.redirect(`/crawl`, HTTP_TEMP_REDIRECT_WITH_GET);
+}
+if (escapedPage === undefined) {
+  return Astro.redirect(`/crawl/${date}`, HTTP_TEMP_REDIRECT_WITH_GET);
+}
+
+const pageUrl = decodeURIComponent(escapedPage);
+const url = await prisma.knownUrl.findUnique({ where: { url: pageUrl } });
+
+const crawledPage =
+  url &&
+  (await prisma.crawledPage.findUnique({
+    where: { crawlDate_urlId: { crawlDate: date, urlId: url.id } },
+    include: {
+      crawl: { select: { prevCrawlDate: true } },
+      normalizedContent: true,
+    },
+  }));
+if (crawledPage == null) {
+  const notFoundPage = new URL("404", Astro.url);
+  notFoundPage.searchParams.set("date", date);
+  notFoundPage.searchParams.set("escapedPage", escapedPage);
+  return Astro.rewrite(notFoundPage, HTTP_TEMP_REDIRECT_WITH_GET);
+}
+
+const { state, httpStatus, change, crawl, contentType } = crawledPage;
+---
+
+<Layout title={`${stripPrefix(pageUrl)} as of the ${date} crawl`}>
+  {
+    state !== "DONE" ? (
+      <p>Not crawled yet.</p>
+    ) : httpStatus == null ? (
+      <p>Unknown status</p>
+    ) : httpStatus >= 400 ? (
+      <p>HTTP error {httpStatus}</p>
+    ) : httpStatus >= 300 ? (
+      <p>
+        HTTP redirect {httpStatus}
+        {crawledPage.location ? (
+          <>
+            {" "}
+            to <a href={crawledPage.location}>{crawledPage.location}</a>
+          </>
+        ) : null}
+      </p>
+    ) : !contentType?.startsWith("text/html") ? (
+      <p>Non-HTML page type: {String(contentType)}.</p>
+    ) : change === "NEW" ? (
+      <p>
+        New since the{" "}
+        <a href={`/crawl/${crawl.prevCrawlDate}`}>{crawl.prevCrawlDate}</a>{" "}
+        crawl.
+      </p>
+    ) : change === "REMOVED" ? (
+      <p>
+        Removed since the{" "}
+        <a href={`/crawl/${crawl.prevCrawlDate}`}>{crawl.prevCrawlDate}</a>{" "}
+        crawl.
+      </p>
+    ) : change === "SAME" ? (
+      <p>
+        Unchanged since the{" "}
+        <a href={`/crawl/${crawl.prevCrawlDate}`}>{crawl.prevCrawlDate}</a>{" "}
+        crawl.
+      </p>
+    ) : change === "CHANGED" ? (
+      <>
+        <p>
+          Changed since the{" "}
+          <a href={`/crawl/${crawl.prevCrawlDate}/${escapedPage}`}>
+            {crawl.prevCrawlDate} version
+          </a>
+          .
+        </p>
+        <h2>Diff</h2>
+        <pre>TODO</pre>
+      </>
+    ) : (
+      <>
+        <p>The page is in an unexpected state:</p>
+        <Debug {crawledPage} />
+      </>
+    )
+  }
+  {
+    crawledPage.normalizedContent && (
+      <>
+        <hr />
+        <h2>Normalized content</h2>
+        <Fragment
+          set:html={toHtml(
+            toHast(
+              fromMarkdown(crawledPage.normalizedContent.content, {
+                extensions: [gfm()],
+                mdastExtensions: [gfmFromMarkdown()],
+              }),
+            ),
+          )}
+        />
+      </>
+    )
+  }
+</Layout>

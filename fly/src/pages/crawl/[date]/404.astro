@@ -1,0 +1,36 @@
+---
+import Layout from "@layouts/Layout.astro";
+import { prisma } from "@lib/prisma";
+
+Astro.response.status = 404;
+
+const date = Astro.url.searchParams.get("date");
+const escapedPage = Astro.url.searchParams.get("escapedPage");
+if (date == null) {
+  return Astro.redirect(`/crawl`, HTTP_TEMP_REDIRECT_WITH_GET);
+}
+if (escapedPage == null) {
+  return Astro.redirect(`/crawl/${date}`, HTTP_TEMP_REDIRECT_WITH_GET);
+}
+
+const page = decodeURIComponent(escapedPage);
+
+const crawl = await prisma.crawl.findUnique({
+  where: { date },
+  select: { date: true },
+});
+if (crawl == null) {
+  // If the crawl isn't found, use that 404 page.
+  const notFoundPage = new URL("/crawl/404");
+  notFoundPage.searchParams.set("date", date);
+  return Astro.rewrite(notFoundPage);
+}
+---
+
+<Layout title={`Page not in ${date} crawl.`}>
+  <p>
+    The <a href={`/crawl/${date}`}>{date}</a> crawl doesn't include <a
+      href={page}>${page}</a
+    >.
+  </p>
+</Layout>
